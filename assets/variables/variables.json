@@ -1,0 +1,17 @@
+[
+  {
+    "name": "host",
+    "value": "",
+    "hint": "服务器地址"
+  },
+  {
+    "name": "port",
+    "value": "",
+    "hint": "端口"
+  },
+  {
+    "name": "device_id",
+    "value": "",
+    "hint": "设备标识"
+  }
+]

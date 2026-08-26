@@ -1,0 +1,19 @@
+[
+  {
+    "label": "状态查询",
+    "command": "{\"get\":\"status\"}"
+  },
+  {
+    "label": "获取配置",
+    "command": "{\"get\":\"config\"}"
+  },
+  {
+    "label": "重启设备",
+    "command": "{\"reset\":1}"
+  },
+  {
+    "label": "自定义示例",
+    "command": "{\"method\":\"custom\",\"params\":{\"key\":\"value\"}}",
+    "hint": "示例指令模板，可自行修改或新增"
+  }
+]
