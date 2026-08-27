@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/command_preset.dart';
+import 'global_log_service.dart';
 
 /// TCP 连接状态
 enum TcpStatus { disconnected, connecting, connected }
@@ -106,6 +107,13 @@ class TcpService extends ChangeNotifier {
   static const _kMaxReconnectAttempts = 3;
 
   Database? _db;
+
+  GlobalLogService? _globalLog;
+
+  /// 初始化全局日志连接（在 load* 方法之前调用）
+  void init({GlobalLogService? globalLog}) {
+    _globalLog = globalLog;
+  }
 
   TcpStatus get status => _status;
   List<LogEntry> get logs => List.unmodifiable(_logs);
@@ -511,6 +519,7 @@ class TcpService extends ChangeNotifier {
     _pendingTimer = Timer(const Duration(seconds: 3), () {
       if (_pending == completer) {
         _pending = null;
+        _pendingTimer = null;
         completer.completeError(TimeoutException('等待响应超时'));
       }
     });
@@ -1195,6 +1204,11 @@ class TcpService extends ChangeNotifier {
     if (_logs.length > _kMaxLogs) {
       _logs.removeRange(0, _logs.length - _kMaxLogs);
     }
+    _globalLog?.log(
+      source: GlobalLogSource.tcp,
+      kind: kind.name,
+      message: message,
+    );
     notifyListeners();
   }
 
@@ -1209,6 +1223,7 @@ class TcpService extends ChangeNotifier {
   void dispose() {
     _pendingTimer?.cancel();
     _socket?.destroy();
+    _db?.close();
     super.dispose();
   }
 }

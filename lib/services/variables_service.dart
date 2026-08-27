@@ -161,12 +161,12 @@ class VariablesService extends ChangeNotifier {
 
   /// 将模板中的 `$(变量名)` 占位符替换为变量值（未定义或为空的保持原样）
   String expand(String template) {
-    var out = template;
-    for (final it in _items) {
-      if (it.value.isEmpty) continue;
-      out = out.replaceAll('\$(${it.name})', it.value);
-    }
-    return out;
+    return template.replaceAllMapped(RegExp(r'\$\(([^)]+)\)'), (match) {
+      final name = match.group(1)!.trim();
+      final it = byName(name);
+      if (it != null && it.value.isNotEmpty) return it.value;
+      return match.group(0)!;
+    });
   }
 
   /// 返回模板中「已定义但未填写值」的变量名。

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../services/global_log_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import 'history_screen.dart';
+import 'log_viewer_screen.dart';
 import 'protocol_docs_screen.dart';
 import 'quick_commands_screen.dart';
 import 'theme_screen.dart';
@@ -14,12 +16,14 @@ class SettingsScreen extends StatefulWidget {
   final TcpService service;
   final VariablesService variables;
   final ThemeService theme;
+  final GlobalLogService globalLog;
 
   const SettingsScreen({
     super.key,
     required this.service,
     required this.variables,
     required this.theme,
+    required this.globalLog,
   });
 
   @override
@@ -30,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TcpService get _service => widget.service;
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
+  GlobalLogService get _globalLog => widget.globalLog;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +127,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '指令协议文档',
           subtitle: '查看内置协议文档',
           onTap: () => _open(const ProtocolDocsScreen()),
+        ),
+        _entryTile(
+          icon: Icons.list_alt,
+          title: '系统日志',
+          subtitle: '${_globalLog.logs.length} 条日志，统一查看各模块运行记录',
+          onTap: () => _open(LogViewerScreen(service: _globalLog)),
         ),
         const ListTile(
           leading: Icon(Icons.info_outline),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/global_log_service.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
 import '../services/tcp_service.dart';
@@ -24,6 +25,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
+  final GlobalLogService _globalLog = GlobalLogService();
   final TcpService _tcpService = TcpService();
   final MqttService _mqttService = MqttService();
   final MqttBrokerService _brokerService = MqttBrokerService();
@@ -35,6 +37,9 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    _tcpService.init(globalLog: _globalLog);
+    _mqttService.init(globalLog: _globalLog);
+    _brokerService.init(globalLog: _globalLog);
     _tcpService.loadHistory();
     _tcpService.loadQuickCommands();
     _tcpService.loadSettings();
@@ -44,9 +49,9 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    _globalLog.dispose();
     _tcpService.dispose();
     _mqttService.disconnect();
-    _mqttService.dispose();
     _brokerService.dispose();
     _vars.dispose();
     super.dispose();
@@ -62,7 +67,12 @@ class _MainShellState extends State<MainShell> {
         variables: _vars,
         theme: _theme,
       ),
-      SettingsScreen(service: _tcpService, variables: _vars, theme: _theme),
+      SettingsScreen(
+        service: _tcpService,
+        variables: _vars,
+        theme: _theme,
+        globalLog: _globalLog,
+      ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {

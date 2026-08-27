@@ -91,6 +91,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() => _connectionError = null);
     await _service.connect(host, port);
+    if (_service.status != TcpStatus.connected) {
+      setState(() => _connectionError = '连接失败，请检查地址和端口是否正确');
+    }
   }
 
   /// 发送回调（SendComposer 已展开/校验内容）：更新发送中状态并交给 TcpService。
@@ -612,63 +615,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 添加/编辑快捷指令弹窗
   Future<void> _showQuickCommandEditor({QuickCommand? existing}) async {
-    final labelCtrl = TextEditingController(text: existing?.label ?? '');
-    final cmdCtrl = TextEditingController(text: existing?.command ?? '');
-    final hintCtrl = TextEditingController(text: existing?.hint ?? '');
-    final isBuiltin = existing?.isBuiltin ?? false;
-
-    final ok = await showDialog<bool>(
+    final result = await showDialog<({String label, String command, String hint})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? '添加快捷指令' : '编辑快捷指令'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: labelCtrl,
-                decoration: const InputDecoration(
-                  labelText: '名称',
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 8),
-              VariableAwareTextField(
-                controller: cmdCtrl,
-                variables: _vars,
-                maxLines: 3,
-                minLines: 1,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                labelText: '指令 (JSON，支持 \$(变量))',
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: hintCtrl,
-                decoration: const InputDecoration(
-                  labelText: '提示（可选）',
-                  isDense: true,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
-        ],
+      builder: (ctx) => _QuickCommandEditorDialog(
+        existing: existing,
+        variables: _vars,
       ),
     );
-    if (ok != true) return;
+    if (result == null) return;
 
-    final label = labelCtrl.text.trim();
-    final command = cmdCtrl.text.trim();
-    final hint = hintCtrl.text.trim();
+    final label = result.label.trim();
+    final command = result.command.trim();
+    final hint = result.hint.trim();
     if (label.isEmpty || command.isEmpty) {
       _service.addSystemLog('名称和指令不能为空');
       return;
@@ -676,7 +634,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final hintOrNull = hint.isEmpty ? null : hint;
     if (existing == null) {
       await _service.addQuickCommand(label, command, hint: hintOrNull);
-    } else if (isBuiltin) {
+    } else if (existing.isBuiltin) {
       await _service.overrideBuiltin(
         existing.builtinIndex!,
         label,
@@ -817,6 +775,106 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// 快捷指令编辑弹窗（独立 StatefulWidget，确保 TextEditingController 正确释放）
+class _QuickCommandEditorDialog extends StatefulWidget {
+  final QuickCommand? existing;
+  final VariablesService variables;
+
+  const _QuickCommandEditorDialog({
+    this.existing,
+    required this.variables,
+  });
+
+  @override
+  State<_QuickCommandEditorDialog> createState() =>
+      _QuickCommandEditorDialogState();
+}
+
+class _QuickCommandEditorDialogState
+    extends State<_QuickCommandEditorDialog> {
+  late final TextEditingController _labelCtrl;
+  late final TextEditingController _cmdCtrl;
+  late final TextEditingController _hintCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelCtrl =
+        TextEditingController(text: widget.existing?.label ?? '');
+    _cmdCtrl =
+        TextEditingController(text: widget.existing?.command ?? '');
+    _hintCtrl = TextEditingController(text: widget.existing?.hint ?? '');
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    _cmdCtrl.dispose();
+    _hintCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.existing == null ? '添加快捷指令' : '编辑快捷指令',
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _labelCtrl,
+              decoration: const InputDecoration(
+                labelText: '名称',
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            VariableAwareTextField(
+              controller: _cmdCtrl,
+              variables: widget.variables,
+              maxLines: 3,
+              minLines: 1,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+              ),
+              labelText: '指令 (JSON，支持 \$(变量))',
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _hintCtrl,
+              decoration: const InputDecoration(
+                labelText: '提示（可选）',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            (
+              label: _labelCtrl.text,
+              command: _cmdCtrl.text,
+              hint: _hintCtrl.text,
+            ),
+          ),
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+}
+
 /// 单条日志展示
 class _LogTile extends StatelessWidget {
   final LogEntry entry;
@@ -932,6 +990,10 @@ class _OtaPanelState extends State<OtaPanel> {
   Future<void> _upload() async {
     final data = _firmware;
     if (data == null) return;
+    if (data.isEmpty) {
+      setState(() => _statusText = '固件文件为空，请重新选择');
+      return;
+    }
     setState(() {
       _uploading = true;
       _progress = null;
@@ -1031,10 +1093,10 @@ class _OtaPanelState extends State<OtaPanel> {
             icon: const Icon(Icons.folder_open),
             label: Text(_fileName ?? '选择固件文件 (.bin)'),
           ),
-          if (_fileName != null) ...[
+          if (_fileName != null && _firmware != null) ...[
             const SizedBox(height: 8),
             Text(
-              '$_fileName  ·  ${_firmware?.length ?? 0} 字节',
+              '$_fileName  ·  ${_firmware!.length} 字节',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],

@@ -9,6 +9,8 @@ import 'package:mqtt_client/mqtt_server_client.dart' as mqtt_server;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'global_log_service.dart';
+
 /// MQTT 客户端连接状态
 enum MqttConnStatus { disconnected, connecting, connected }
 
@@ -104,6 +106,13 @@ class MqttService extends ChangeNotifier {
   StreamSubscription<List<mqtt.MqttReceivedMessage<mqtt.MqttMessage?>>?>?
   _updatesSub;
   MqttClientConfig _config = const MqttClientConfig();
+
+  GlobalLogService? _globalLog;
+
+  /// 初始化全局日志连接（在 loadConfig 方法之前调用）
+  void init({GlobalLogService? globalLog}) {
+    _globalLog = globalLog;
+  }
 
   MqttConnStatus get status => _status;
   bool get isConnected => _status == MqttConnStatus.connected;
@@ -392,6 +401,12 @@ class MqttService extends ChangeNotifier {
   void _addLog(MqttLogKind kind, String message, {String? topic}) {
     if (_logs.length >= maxLogs) _logs.removeAt(0);
     _logs.add(MqttLogEntry(DateTime.now(), kind, message, topic: topic));
+    _globalLog?.log(
+      source: GlobalLogSource.mqtt,
+      kind: kind.name,
+      message: message,
+      topic: topic,
+    );
     notifyListeners();
   }
 

@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_broker_lite/mqtt_broker_lite.dart' as broker;
 
+import 'global_log_service.dart';
+
 /// 内置 MQTT Broker 事件类型
 enum MqttBrokerLogKind {
   system,
@@ -40,6 +42,13 @@ class MqttBrokerService extends ChangeNotifier {
   String? _lanIpV4;
   final List<MqttBrokerLog> _logs = [];
   final List<StreamSubscription<dynamic>> _subs = [];
+
+  GlobalLogService? _globalLog;
+
+  /// 初始化全局日志连接（在 start 之前调用）
+  void init({GlobalLogService? globalLog}) {
+    _globalLog = globalLog;
+  }
 
   bool get running => _running;
   int get port => _port;
@@ -78,7 +87,7 @@ class MqttBrokerService extends ChangeNotifier {
         ..add(
           b.onUnsubscribe.listen((e) {
             _addLog(
-              MqttBrokerLogKind.subscribe,
+              MqttBrokerLogKind.disconnect,
               '${e.clientId} 取消订阅: ${e.filter}',
             );
           }),
@@ -101,6 +110,7 @@ class MqttBrokerService extends ChangeNotifier {
       notifyListeners();
       return null;
     } catch (e) {
+      _clearSubs();
       _addLog(MqttBrokerLogKind.error, '启动失败: $e');
       return '内置 Broker 启动失败: $e';
     }
@@ -143,6 +153,11 @@ class MqttBrokerService extends ChangeNotifier {
   void _addLog(MqttBrokerLogKind kind, String message) {
     if (_logs.length >= maxLogs) _logs.removeAt(0);
     _logs.add(MqttBrokerLog(DateTime.now(), kind, message));
+    _globalLog?.log(
+      source: GlobalLogSource.broker,
+      kind: kind.name,
+      message: message,
+    );
     notifyListeners();
   }
 
@@ -159,9 +174,8 @@ class MqttBrokerService extends ChangeNotifier {
     final b = _broker;
     _broker = null;
     if (b != null) {
-      try {
-        b.stop();
-      } catch (_) {}
+      // stop() 返回 Future，同步 try-catch 无法捕获其异步错误
+      unawaited(b.stop().catchError((_) {}));
     }
     super.dispose();
   }
