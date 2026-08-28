@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../models/topic_template.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
 import '../services/theme_service.dart';
+import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
@@ -18,6 +20,9 @@ class MqttScreen extends StatefulWidget {
   /// 内置测试 Broker 服务（可在配置面板中启动/停止）
   final MqttBrokerService broker;
   final VariablesService variables;
+
+  /// 主题模板组服务（管理模板组与模板，在设置页维护）
+  final TopicTemplateService topics;
   final ThemeService theme;
 
   const MqttScreen({
@@ -25,6 +30,7 @@ class MqttScreen extends StatefulWidget {
     required this.service,
     required this.broker,
     required this.variables,
+    required this.topics,
     required this.theme,
   });
 
@@ -38,13 +44,14 @@ class _MqttScreenState extends State<MqttScreen> {
   final _payloadCtrl = TextEditingController();
   final ScrollController _recordScroll = ScrollController();
   int _qos = 0;
-  bool _composerExpanded = false;
+  bool _composerExpanded = true;
   bool _focusMode = false;
   final List<String> _pubHistory = [];
 
   MqttService get _service => widget.service;
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
+  TopicTemplateService get _topics => widget.topics;
 
   @override
   void initState() {
@@ -167,41 +174,78 @@ class _MqttScreenState extends State<MqttScreen> {
     return true;
   }
 
-  // ---------- 可输入 + 可选模板的 topic 下拉框 ----------
+  // ---------- 可输入 + 下拉选择模板的 topic 输入框 ----------
 
   Widget _buildTopicMenu({
     required TextEditingController controller,
-    required List<String> topics,
     required String label,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return DropdownMenu<String>(
-          width: constraints.maxWidth,
-          controller: controller,
-          requestFocusOnTap: true,
-          enableFilter: true,
-          label: Text(label),
-          textStyle: const TextStyle(fontSize: 13),
-          menuHeight: topics.length > 8 ? 280 : null,
-          dropdownMenuEntries: [
-            for (final t in topics)
-              DropdownMenuEntry<String>(value: t, label: t),
-          ],
-          onSelected: (t) {
-            if (t == null) return;
-            controller.text = _vars.expand(t);
-            final missing = _vars.emptyVariableNames(t);
-            if (missing.isNotEmpty) {
-              _showSnack(
-                '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
-                '主题未展开，请先在「设置 · 模板变量」中填写',
-              );
-            }
-          },
-        );
-      },
+    final groups = _topics.groups;
+    return TextField(
+      controller: controller,
+      style: const TextStyle(fontSize: 13),
+      textDirection: TextDirection.ltr,
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        border: const OutlineInputBorder(),
+        // 下拉选择模板：模板组为一级，组内模板为二级菜单项
+        suffixIcon: groups.isEmpty
+            ? null
+            : MenuAnchor(
+                menuChildren: [
+                  for (final g in groups)
+                    if (g.templates.isNotEmpty)
+                      SubmenuButton(
+                        menuChildren: [
+                          for (final t in g.templates)
+                            MenuItemButton(
+                              leadingIcon: Icon(
+                                t.publish ? Icons.upload : Icons.download,
+                                size: 16,
+                              ),
+                              onPressed: () => _applyTemplate(controller, t),
+                              child: Text(t.label),
+                            ),
+                        ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            g.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                ],
+                builder: (context, menuController, child) {
+                  return IconButton(
+                    tooltip: '主题模板',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.widgets_outlined, size: 20),
+                    onPressed: () => menuController.isOpen
+                        ? menuController.close()
+                        : menuController.open(),
+                  );
+                },
+              ),
+      ),
     );
+  }
+
+  /// 选用一个主题模板：展开变量后填入输入框，缺变量时提示
+  void _applyTemplate(TextEditingController controller, TopicTemplate t) {
+    controller.text = _vars.expand(t.topic);
+    if (!mounted) return;
+    final missing = _vars.emptyVariableNames(t.topic);
+    if (missing.isNotEmpty) {
+      _showSnack(
+        '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
+        '沿用占位符，请先在「设置 · 模板变量」中填写',
+      );
+    }
   }
 
   @override
@@ -447,7 +491,6 @@ class _MqttScreenState extends State<MqttScreen> {
   // ---------- 订阅行（与记录区计数/清空合并为一行） ----------
 
   Widget _buildSubscribeBar() {
-    final topics = _service.config.topics;
     final logs = _service.logs;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 2, 4, 2),
@@ -459,7 +502,6 @@ class _MqttScreenState extends State<MqttScreen> {
               Expanded(
                 child: _buildTopicMenu(
                   controller: _subTopicCtrl,
-                  topics: topics,
                   label: '订阅主题',
                 ),
               ),
@@ -546,7 +588,6 @@ class _MqttScreenState extends State<MqttScreen> {
   // ---------- 发布面板（窄屏折叠 / 宽屏右侧常驻） ----------
 
   Widget _buildSendPanel({required bool compact, bool embedded = false}) {
-    final topics = _service.config.topics;
     final expanded = !compact || _composerExpanded;
     final panel = expanded
         ? Column(
@@ -579,7 +620,6 @@ class _MqttScreenState extends State<MqttScreen> {
                   Expanded(
                     child: _buildTopicMenu(
                       controller: _pubTopicCtrl,
-                      topics: topics,
                       label: '发送主题',
                     ),
                   ),
@@ -740,7 +780,7 @@ class _VariableEditRowState extends State<_VariableEditRow> {
   }
 }
 
-/// 可视化配置面板：服务器 / client id 模板 / 账号 / 多个主题模板 /
+/// 可视化配置面板：服务器 / client id 模板 / 账号 /
 /// 可折叠模板变量
 class _ConfigPanel extends StatefulWidget {
   final MqttService service;
@@ -763,7 +803,6 @@ class _ConfigPanelState extends State<_ConfigPanel> {
   final _cidCtrl = TextEditingController(text: 'debug_tools');
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final List<TextEditingController> _topicCtrls = [];
 
   MqttService get _service => widget.service;
   MqttBrokerService get _broker => widget.broker;
@@ -778,12 +817,6 @@ class _ConfigPanelState extends State<_ConfigPanel> {
     _cidCtrl.text = cfg.clientIdTemplate;
     _userCtrl.text = cfg.username;
     _passCtrl.text = cfg.password;
-    for (final t in cfg.topics) {
-      _topicCtrls.add(TextEditingController(text: t));
-    }
-    if (_topicCtrls.isEmpty) {
-      _topicCtrls.add(TextEditingController());
-    }
   }
 
   @override
@@ -793,9 +826,6 @@ class _ConfigPanelState extends State<_ConfigPanel> {
     _cidCtrl.dispose();
     _userCtrl.dispose();
     _passCtrl.dispose();
-    for (final c in _topicCtrls) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -806,10 +836,6 @@ class _ConfigPanelState extends State<_ConfigPanel> {
       username: _userCtrl.text.trim(),
       password: _passCtrl.text.trim(),
       clientIdTemplate: _cidCtrl.text.trim(),
-      topics: [
-        for (final c in _topicCtrls)
-          if (c.text.trim().isNotEmpty) c.text.trim(),
-      ],
     );
     _service.saveConfig(config);
     Navigator.pop(context);
@@ -859,7 +885,10 @@ class _ConfigPanelState extends State<_ConfigPanel> {
                     const SizedBox(width: 8),
                     const Text(
                       '内置测试 Broker',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     Container(
@@ -868,9 +897,7 @@ class _ConfigPanelState extends State<_ConfigPanel> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: (running
-                                ? Colors.greenAccent
-                                : Colors.grey)
+                        color: (running ? Colors.greenAccent : Colors.grey)
                             .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -929,10 +956,7 @@ class _ConfigPanelState extends State<_ConfigPanel> {
             const Divider(height: 1),
             ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-              title: const Text(
-                '运行日志',
-                style: TextStyle(fontSize: 12),
-              ),
+              title: const Text('运行日志', style: TextStyle(fontSize: 12)),
               children: [
                 if (_broker.logs.isEmpty)
                   const Padding(
@@ -964,9 +988,7 @@ class _ConfigPanelState extends State<_ConfigPanel> {
                                       '${e.time.hour.toString().padLeft(2, '0')}:'
                                       '${e.time.minute.toString().padLeft(2, '0')}:'
                                       '${e.time.second.toString().padLeft(2, '0')}  ',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                  ),
+                                  style: TextStyle(color: Colors.grey.shade500),
                                 ),
                                 TextSpan(
                                   text: e.message,
@@ -1008,10 +1030,7 @@ class _ConfigPanelState extends State<_ConfigPanel> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-              ),
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
           ),
         ],
@@ -1113,55 +1132,6 @@ class _ConfigPanelState extends State<_ConfigPanel> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Text('主题模板', style: Theme.of(context).textTheme.titleSmall),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () =>
-                      setState(() => _topicCtrls.add(TextEditingController())),
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('添加'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            for (var i = 0; i < _topicCtrls.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: VariableAwareTextField(
-                        controller: _topicCtrls[i],
-                        variables: _vars,
-                        style: const TextStyle(fontSize: 13),
-                        labelText: '主题模板 ${i + 1}',
-                        hintText:
-                            'sensors/\$(device_id)/data',
-                        bordered: true,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: '删除',
-                      onPressed: _topicCtrls.length > 1
-                          ? () {
-                              final c = _topicCtrls.removeAt(i);
-                              c.dispose();
-                              setState(() {});
-                            }
-                          : null,
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                    ),
-                  ],
-                ),
-              ),
-            const Text(
-              '支持 \$(变量)',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 16),
             // 模板变量（可折叠快捷填写，与设置页联动）

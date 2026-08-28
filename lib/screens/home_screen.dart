@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _connectionInitialized = false;
   String? _connectionError;
   bool _sending = false;
-  bool _commandExpanded = false;
+  bool _commandExpanded = true;
   bool _focusMode = false;
 
   @override
@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> get _tcpHistory => [for (final e in _service.history) e.command];
 
   /// 快捷指令：点击自动替换变量后填入输入框（不自动发送），便于修改后手动发送。
-  /// 未填写的变量会在填入时提示，引导去模板变量页填写。
+  /// 填入时给出 toast 提示；未填写的变量会额外提示，引导去模板变量页填写。
   void _sendPreset(QuickCommand qc) {
     _cmdCtrl.text = _vars.expand(qc.command);
     _cmdFocus.requestFocus();
@@ -120,6 +120,13 @@ class _HomeScreenState extends State<HomeScreen> {
             '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
             '发送前请先在「设置 · 模板变量」中填写',
           ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已填入快捷指令「${qc.label}」，可编辑后发送'),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -615,13 +622,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 添加/编辑快捷指令弹窗
   Future<void> _showQuickCommandEditor({QuickCommand? existing}) async {
-    final result = await showDialog<({String label, String command, String hint})>(
-      context: context,
-      builder: (ctx) => _QuickCommandEditorDialog(
-        existing: existing,
-        variables: _vars,
-      ),
-    );
+    final result =
+        await showDialog<({String label, String command, String hint})>(
+          context: context,
+          builder: (ctx) =>
+              _QuickCommandEditorDialog(existing: existing, variables: _vars),
+        );
     if (result == null) return;
 
     final label = result.label.trim();
@@ -780,18 +786,14 @@ class _QuickCommandEditorDialog extends StatefulWidget {
   final QuickCommand? existing;
   final VariablesService variables;
 
-  const _QuickCommandEditorDialog({
-    this.existing,
-    required this.variables,
-  });
+  const _QuickCommandEditorDialog({this.existing, required this.variables});
 
   @override
   State<_QuickCommandEditorDialog> createState() =>
       _QuickCommandEditorDialogState();
 }
 
-class _QuickCommandEditorDialogState
-    extends State<_QuickCommandEditorDialog> {
+class _QuickCommandEditorDialogState extends State<_QuickCommandEditorDialog> {
   late final TextEditingController _labelCtrl;
   late final TextEditingController _cmdCtrl;
   late final TextEditingController _hintCtrl;
@@ -799,10 +801,8 @@ class _QuickCommandEditorDialogState
   @override
   void initState() {
     super.initState();
-    _labelCtrl =
-        TextEditingController(text: widget.existing?.label ?? '');
-    _cmdCtrl =
-        TextEditingController(text: widget.existing?.command ?? '');
+    _labelCtrl = TextEditingController(text: widget.existing?.label ?? '');
+    _cmdCtrl = TextEditingController(text: widget.existing?.command ?? '');
     _hintCtrl = TextEditingController(text: widget.existing?.hint ?? '');
   }
 
@@ -817,19 +817,14 @@ class _QuickCommandEditorDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(
-        widget.existing == null ? '添加快捷指令' : '编辑快捷指令',
-      ),
+      title: Text(widget.existing == null ? '添加快捷指令' : '编辑快捷指令'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _labelCtrl,
-              decoration: const InputDecoration(
-                labelText: '名称',
-                isDense: true,
-              ),
+              decoration: const InputDecoration(labelText: '名称', isDense: true),
             ),
             const SizedBox(height: 8),
             VariableAwareTextField(
@@ -837,10 +832,7 @@ class _QuickCommandEditorDialogState
               variables: widget.variables,
               maxLines: 3,
               minLines: 1,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 13,
-              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               labelText: '指令 (JSON，支持 \$(变量))',
             ),
             const SizedBox(height: 8),
@@ -860,14 +852,11 @@ class _QuickCommandEditorDialogState
           child: const Text('取消'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            (
-              label: _labelCtrl.text,
-              command: _cmdCtrl.text,
-              hint: _hintCtrl.text,
-            ),
-          ),
+          onPressed: () => Navigator.pop(context, (
+            label: _labelCtrl.text,
+            command: _cmdCtrl.text,
+            hint: _hintCtrl.text,
+          )),
           child: const Text('保存'),
         ),
       ],

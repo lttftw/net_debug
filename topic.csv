@@ -1,0 +1,15 @@
+# 主题                                                                         , 类型, 说明
+/sys/${productKey}/${deviceName}/thing/event/property/post                     , 发布, 设备属性上报
+/sys/${productKey}/${deviceName}/thing/event/property/post_reply               , 订阅, 云端响应属性上报
+
+/sys/${productKey}/${deviceName}/thing/service/property/get                    , 订阅, 设备属性获取
+/sys/${productKey}/${deviceName}/thing/service/property/get_reply              , 发布, 云端响应属性获取
+
+/sys/${productKey}/${deviceName}/thing/service/property/set                    , 订阅, 设备属性设置
+/sys/${productKey}/${deviceName}/thing/service/property/set_reply              , 发布, 云端响应属性设置
+
+/sys/${productKey}/${deviceName}/thing/event/${tsl.event.identifier}/post      , 发布, 设备事件上报
+/sys/${productKey}/${deviceName}/thing/event/${tsl.event.identifier}/post_reply, 订阅, 云端响应事件上报
+
+/sys/${productKey}/${deviceName}/thing/service/${tsl.event.identifier}         , 订阅, 设备服务调用
+/sys/${productKey}/${deviceName}/thing/service/${tsl.event.identifier}_reply   , 发布, 云端响应服务调用

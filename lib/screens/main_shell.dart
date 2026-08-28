@@ -5,6 +5,7 @@ import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
+import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
 import 'home_screen.dart';
 import 'mqtt_screen.dart';
@@ -24,11 +25,12 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   final GlobalLogService _globalLog = GlobalLogService();
   final TcpService _tcpService = TcpService();
   final MqttService _mqttService = MqttService();
   final MqttBrokerService _brokerService = MqttBrokerService();
+  final TopicTemplateService _topicTemplates = TopicTemplateService();
   final VariablesService _vars = VariablesService();
   int _index = 0;
 
@@ -37,22 +39,27 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tcpService.init(globalLog: _globalLog);
     _mqttService.init(globalLog: _globalLog);
     _brokerService.init(globalLog: _globalLog);
+    _globalLog.load();
     _tcpService.loadHistory();
     _tcpService.loadQuickCommands();
     _tcpService.loadSettings();
     _mqttService.loadConfig();
+    _topicTemplates.load();
     _vars.load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _globalLog.dispose();
     _tcpService.dispose();
     _mqttService.disconnect();
     _brokerService.dispose();
+    _topicTemplates.dispose();
     _vars.dispose();
     super.dispose();
   }
@@ -65,6 +72,7 @@ class _MainShellState extends State<MainShell> {
         service: _mqttService,
         broker: _brokerService,
         variables: _vars,
+        topics: _topicTemplates,
         theme: _theme,
       ),
       SettingsScreen(
@@ -72,6 +80,7 @@ class _MainShellState extends State<MainShell> {
         variables: _vars,
         theme: _theme,
         globalLog: _globalLog,
+        topics: _topicTemplates,
       ),
     ];
     return LayoutBuilder(
@@ -144,6 +153,16 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _selectPage(int index) => setState(() => _index = index);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 进入后台/失焦时把缓冲的日志落盘，避免进程被杀丢日志
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _globalLog.flush();
+    }
+    super.didChangeAppLifecycleState(state);
+  }
 
   static const _destinations = [
     NavigationDestination(

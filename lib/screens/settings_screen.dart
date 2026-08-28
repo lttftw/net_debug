@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../services/global_log_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
+import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
 import 'history_screen.dart';
 import 'log_viewer_screen.dart';
 import 'protocol_docs_screen.dart';
 import 'quick_commands_screen.dart';
 import 'theme_screen.dart';
+import 'topic_template_screen.dart';
 import 'variables_screen.dart';
 
 /// 设置页（一级）：按工具分类的简洁入口列表，具体设置项在二级页面中。
@@ -17,6 +19,7 @@ class SettingsScreen extends StatefulWidget {
   final VariablesService variables;
   final ThemeService theme;
   final GlobalLogService globalLog;
+  final TopicTemplateService topics;
 
   const SettingsScreen({
     super.key,
@@ -24,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
     required this.variables,
     required this.theme,
     required this.globalLog,
+    required this.topics,
   });
 
   @override
@@ -38,15 +42,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
   GlobalLogService get _globalLog => widget.globalLog;
+  TopicTemplateService get _topics => widget.topics;
+
+  /// 全部主题模板总数
+  int get _totalTemplateCount =>
+      _topics.groups.fold(0, (sum, g) => sum + g.templates.length);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('应用设置'),
-      ),
+      appBar: AppBar(title: const Text('应用设置')),
       body: ListenableBuilder(
-        listenable: Listenable.merge([_service, _vars, _theme]),
+        listenable: Listenable.merge([_service, _vars, _theme, _topics]),
         builder: (context, _) {
           return Center(
             child: ConstrainedBox(
@@ -115,10 +122,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 visualDensity: VisualDensity.compact,
                 iconSize: 20,
                 icon: const Icon(Icons.menu_book_outlined),
-                onPressed: () => _open(const ProtocolDocsScreen(
-                  assetPath: _otaProtocolAsset,
-                  title: 'OTA 协议接入文档',
-                )),
+                onPressed: () => _open(
+                  const ProtocolDocsScreen(
+                    assetPath: _otaProtocolAsset,
+                    title: 'OTA 协议接入文档',
+                  ),
+                ),
               ),
               Switch(
                 value: _service.otaEnabled,
@@ -134,6 +143,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '模板变量',
           subtitle: '${_vars.items.length} 个变量，可在 TCP/MQTT 中展开',
           onTap: () => _open(VariablesScreen(service: _vars)),
+        ),
+        _entryTile(
+          icon: Icons.widgets_outlined,
+          title: '主题模板',
+          subtitle:
+              '${_topics.groups.length} 个模板组 · $_totalTemplateCount 个模板，可在 MQTT 页下拉选择',
+          onTap: () => _open(TopicTemplateScreen(service: _topics)),
         ),
         _entryTile(
           icon: Icons.palette_outlined,
@@ -163,10 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
-  Widget _sectionBlock(
-    String title,
-    List<Widget> children,
-  ) {
+  Widget _sectionBlock(String title, List<Widget> children) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [_sectionTitle(title), _sectionCard(children)],

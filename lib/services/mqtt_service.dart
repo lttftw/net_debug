@@ -30,15 +30,13 @@ class MqttLogEntry {
 }
 
 /// 保存的 MQTT 客户端连接配置。
-/// [clientIdTemplate] 支持 `$(变量)` 占位符；[topics] 为多个主题模板，
-/// 订阅/发送时展开变量后使用。
+/// [clientIdTemplate] 支持 `$(变量)` 占位符。
 class MqttClientConfig {
   final String host;
   final int port;
   final String username;
   final String password;
   final String clientIdTemplate;
-  final List<String> topics;
 
   const MqttClientConfig({
     this.host = '',
@@ -46,7 +44,6 @@ class MqttClientConfig {
     this.username = '',
     this.password = '',
     this.clientIdTemplate = 'debug_tools',
-    this.topics = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -55,7 +52,6 @@ class MqttClientConfig {
     'username': username,
     'password': password,
     'clientIdTemplate': clientIdTemplate,
-    'topics': topics,
   };
 
   MqttClientConfig copyWith({
@@ -64,7 +60,6 @@ class MqttClientConfig {
     String? username,
     String? password,
     String? clientIdTemplate,
-    List<String>? topics,
   }) {
     return MqttClientConfig(
       host: host ?? this.host,
@@ -72,7 +67,6 @@ class MqttClientConfig {
       username: username ?? this.username,
       password: password ?? this.password,
       clientIdTemplate: clientIdTemplate ?? this.clientIdTemplate,
-      topics: topics ?? this.topics,
     );
   }
 
@@ -86,7 +80,6 @@ class MqttClientConfig {
             (json['clientIdTemplate'] as String?) ??
             (json['clientId'] as String?) ??
             'debug_tools',
-        topics: (json['topics'] as List?)?.cast<String>() ?? const [],
       );
 }
 
