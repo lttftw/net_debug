@@ -31,6 +31,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  /// OTA 协议接入文档（随仓库发布的公开资源）
+  static const _otaProtocolAsset = 'assets/docs/OTA_PROTOCOL.md';
+
   TcpService get _service => widget.service;
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
@@ -96,15 +99,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               '指令 ${_service.history.length} 条 · 连接 ${_service.connections.length} 条',
           onTap: () => _open(HistoryScreen(service: _service)),
         ),
-        SwitchListTile(
-          secondary: const Icon(Icons.system_update_alt),
+        ListTile(
+          leading: const Icon(Icons.system_update_alt),
           title: const Text('OTA 固件升级扩展'),
           subtitle: const Text(
             '针对特定设备（如支持 JSON OTA 的设备）的固件升级协议。'
             '开启后 TCP 工具页显示升级入口；设备需支持对应协议',
           ),
-          value: _service.otaEnabled,
-          onChanged: (v) => _service.setOtaEnabled(v),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 二级页入口：OTA 协议接入文档
+              IconButton(
+                tooltip: 'OTA 协议接入文档',
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                icon: const Icon(Icons.menu_book_outlined),
+                onPressed: () => _open(const ProtocolDocsScreen(
+                  assetPath: _otaProtocolAsset,
+                  title: 'OTA 协议接入文档',
+                )),
+              ),
+              Switch(
+                value: _service.otaEnabled,
+                onChanged: (v) => _service.setOtaEnabled(v),
+              ),
+            ],
+          ),
         ),
       ]),
       _sectionBlock('通用', [

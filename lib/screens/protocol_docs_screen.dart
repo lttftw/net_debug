@@ -15,7 +15,17 @@ import 'package:markdown/markdown.dart' as md;
 /// - 目录跳转：目标章节已构建则直接滚到精确偏移；未构建则按已测
 ///   章节的平均高度估算位置快速跳转，随后帧间修正到精确位置。
 class ProtocolDocsScreen extends StatefulWidget {
-  const ProtocolDocsScreen({super.key});
+  /// 自定义文档资产路径；为 null 时使用内置 TCP 协议文档
+  final String? assetPath;
+
+  /// 页面标题
+  final String title;
+
+  const ProtocolDocsScreen({
+    super.key,
+    this.assetPath,
+    this.title = '协议文档',
+  });
 
   @override
   State<ProtocolDocsScreen> createState() => _ProtocolDocsScreenState();
@@ -69,8 +79,8 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
 
   static final _headingRe = RegExp(r'^ {0,3}(#{1,4})\s+(.*)$');
 
-  /// 进程内缓存：内容加载 + 章节切分只执行一次
-  static Future<_DocCache>? _cacheFuture;
+  /// 进程内缓存：按资产路径键控，内容加载 + 章节切分每份文档只执行一次
+  static final Map<String, Future<_DocCache>> _cacheFutures = {};
 
   late final Future<_DocCache> _future = _load();
   final ScrollController _scrollController = ScrollController();
@@ -111,13 +121,26 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
 
   // ---------- 加载与切分 ----------
 
-  Future<_DocCache> _load() => _cacheFuture ??= _loadAndSplit();
+  Future<_DocCache> _load() {
+    final key = widget.assetPath ?? _fullAsset;
+    return _cacheFutures.putIfAbsent(key, () => _loadAndSplit(key));
+  }
 
-  /// 优先尝试完整版文档，缺失时回退公开版示范文档
-  static Future<_DocCache> _loadAndSplit() async {
-    for (final asset in [_fullAsset, _publicAsset]) {
+  /// 显式指定的文档直接加载，加载失败时给出错误章节；
+  /// 内置 TCP 文档优先尝试完整版，缺失时回退公开版示范文档
+  static Future<_DocCache> _loadAndSplit(String asset) async {
+    if (asset != _fullAsset) {
       try {
         return _splitSections(await rootBundle.loadString(asset));
+      } catch (_) {
+        return const _DocCache([
+          _DocSection(level: null, title: '', text: '文档加载失败'),
+        ]);
+      }
+    }
+    for (final a in [_fullAsset, _publicAsset]) {
+      try {
+        return _splitSections(await rootBundle.loadString(a));
       } catch (_) {
         // 尝试下一个资源
       }
@@ -302,7 +325,7 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('协议文档')),
+      appBar: AppBar(title: Text(widget.title)),
       body: FutureBuilder<_DocCache>(
         future: _future,
         builder: (context, snapshot) {
