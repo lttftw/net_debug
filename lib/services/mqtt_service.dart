@@ -45,7 +45,7 @@ class MqttClientConfig {
     this.port = 1883,
     this.username = '',
     this.password = '',
-    this.clientIdTemplate = 'tcp_flutter',
+    this.clientIdTemplate = 'debug_tools',
     this.topics = const [],
   });
 
@@ -85,7 +85,7 @@ class MqttClientConfig {
         clientIdTemplate:
             (json['clientIdTemplate'] as String?) ??
             (json['clientId'] as String?) ??
-            'tcp_flutter',
+            'debug_tools',
         topics: (json['topics'] as List?)?.cast<String>() ?? const [],
       );
 }
@@ -133,11 +133,11 @@ class MqttService extends ChangeNotifier {
           (json as Map).cast<String, dynamic>(),
         );
       }
-      // 旧版默认 Client ID 在多端或公网 Broker 上会冲突，
-      // 仅迁移默认值；用户明确配置的 ID 保持不变。
-      if (_usesLegacyDefaultClientId(_config.clientIdTemplate)) {
+      // 默认 Client ID 在多端或公网 Broker 上会冲突，
+      // 仅在用户未自定义时追加安装 ID 保证唯一；明确配置的 ID 保持不变。
+      if (_usesDefaultClientId(_config.clientIdTemplate)) {
         _config = _config.copyWith(
-          clientIdTemplate: 'tcp_flutter_$installationId',
+          clientIdTemplate: 'debug_tools_$installationId',
         );
         await file.writeAsString(jsonEncode(_config.toJson()));
       }
@@ -183,18 +183,18 @@ class MqttService extends ChangeNotifier {
     }
     await disconnect(quiet: true);
     final configuredClientId = (clientId ?? cfg.clientIdTemplate).trim();
-    final cid = _usesLegacyDefaultClientId(configuredClientId)
-        ? 'tcp_flutter_${await _ensureInstallationId()}'
+    final cid = _usesDefaultClientId(configuredClientId)
+        ? 'debug_tools_${await _ensureInstallationId()}'
         : configuredClientId;
     _setStatus(MqttConnStatus.connecting);
     _addLog(
       MqttLogKind.system,
-      '正在连接 ${cfg.host}:${cfg.port} (client: ${cid.isEmpty ? 'tcp_flutter' : cid}) ...',
+      '正在连接 ${cfg.host}:${cfg.port} (client: ${cid.isEmpty ? 'debug_tools' : cid}) ...',
     );
 
     final client = mqtt_server.MqttServerClient(
       cfg.host.trim(),
-      cid.isEmpty ? 'tcp_flutter' : cid,
+      cid.isEmpty ? 'debug_tools' : cid,
       maxConnectionAttempts: 1,
     );
     client.port = cfg.port;
@@ -466,8 +466,8 @@ class MqttService extends ChangeNotifier {
     return filterLevels.length == topicLevels.length;
   }
 
-  bool _usesLegacyDefaultClientId(String value) =>
-      value.trim().isEmpty || value.trim() == 'tcp_flutter';
+  bool _usesDefaultClientId(String value) =>
+      value.trim().isEmpty || value.trim() == 'debug_tools';
 
   Future<String> _ensureInstallationId([Directory? supportDir]) {
     return _installationIdFuture ??= _loadOrCreateInstallationId(supportDir);

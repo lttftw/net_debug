@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "" "\0"
             VALUE "FileDescription", "TCP / MQTT 调试工具" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "tcp_flutter" "\0"
+            VALUE "InternalName", "debug_tools" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026" "\0"
-            VALUE "OriginalFilename", "tcp_flutter.exe" "\0"
+            VALUE "OriginalFilename", "debug_tools.exe" "\0"
             VALUE "ProductName", "TCP / MQTT 调试工具" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

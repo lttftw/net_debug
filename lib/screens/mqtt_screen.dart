@@ -760,7 +760,7 @@ class _ConfigPanel extends StatefulWidget {
 class _ConfigPanelState extends State<_ConfigPanel> {
   final _hostCtrl = TextEditingController();
   final _portCtrl = TextEditingController(text: '1883');
-  final _cidCtrl = TextEditingController(text: 'tcp_flutter');
+  final _cidCtrl = TextEditingController(text: 'debug_tools');
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final List<TextEditingController> _topicCtrls = [];

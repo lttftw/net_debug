@@ -136,22 +136,11 @@ class TcpService extends ChangeNotifier {
   bool get autoScroll => _autoScroll;
   bool get busy => _pending != null;
 
-  /// 旧版 JSON 数据目录（仅用于迁移）
-  String get _legacyBaseDir {
-    if (Platform.isWindows) {
-      return Platform.environment['APPDATA'] ?? Directory.systemTemp.path;
-    }
-    if (Platform.isAndroid) {
-      return '${Directory.systemTemp.path}/tcp_flutter';
-    }
-    return Directory.systemTemp.path;
-  }
-
   /// 初始化 sqlite 数据库（应用支持目录，覆盖安装后数据保留）
   Future<void> _initDb() async {
     if (_db != null) return;
     final dir = await getApplicationSupportDirectory();
-    final path = p.join(dir.path, 'tcp_flutter.db');
+    final path = p.join(dir.path, 'debug_tools.db');
     _db = await openDatabase(
       path,
       version: 3,
@@ -217,7 +206,7 @@ class TcpService extends ChangeNotifier {
     );
   }
 
-  /// 从 sqlite 加载历史指令与连接配置，并迁移旧版 JSON 数据
+  /// 从 sqlite 加载历史指令与连接配置
   Future<void> loadHistory() async {
     try {
       await _initDb();
@@ -247,7 +236,6 @@ class TcpService extends ChangeNotifier {
           ConnectionProfile(row['host'] as String, row['port'] as int),
         );
       }
-      await _migrateLegacyFiles();
     } catch (_) {
       // 忽略存储错误
     }
@@ -279,101 +267,6 @@ class TcpService extends ChangeNotifier {
       await file.writeAsString(jsonEncode({'ota_enabled': _otaEnabled}));
     } catch (_) {
       // 忽略存储错误
-    }
-  }
-
-  /// 迁移旧版 JSON 文件数据到 sqlite（仅当数据库为空时）
-  Future<void> _migrateLegacyFiles() async {
-    final db = _db;
-    if (db == null) return;
-    final sep = Platform.pathSeparator;
-    final historyFile = File('$_legacyBaseDir${sep}tcp_flutter_history.json');
-    final configFile = File('$_legacyBaseDir${sep}tcp_flutter_config.json');
-
-    if (await historyFile.exists()) {
-      final count = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM command_history'),
-      )!;
-      if (count == 0) {
-        try {
-          final list =
-              jsonDecode(await historyFile.readAsString()) as List<dynamic>;
-          for (final item in list) {
-            if (item is String) {
-              await db.insert('command_history', {
-                'cmd': item,
-                'time': DateTime.now().toIso8601String(),
-              });
-            } else if (item is Map) {
-              try {
-                final e = HistoryEntry.fromJson(item.cast<String, dynamic>());
-                await db.insert('command_history', {
-                  'cmd': e.command,
-                  'time': e.time.toIso8601String(),
-                });
-              } catch (_) {}
-            }
-          }
-          _history.clear();
-          final rows = await db.query(
-            'command_history',
-            columns: ['cmd', 'time'],
-            orderBy: 'id DESC',
-            limit: _kMaxHistory,
-          );
-          for (final row in rows) {
-            _history.add(
-              HistoryEntry(
-                row['cmd'] as String,
-                DateTime.tryParse(row['time'] as String? ?? '') ??
-                    DateTime.now(),
-              ),
-            );
-          }
-        } catch (_) {}
-      }
-      try {
-        await historyFile.delete();
-      } catch (_) {}
-    }
-
-    if (await configFile.exists()) {
-      final count = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM connection_history'),
-      )!;
-      if (count == 0) {
-        try {
-          final list =
-              jsonDecode(await configFile.readAsString()) as List<dynamic>;
-          for (final item in list) {
-            try {
-              final c = ConnectionProfile.fromJson(
-                (item as Map).cast<String, dynamic>(),
-              );
-              await db.insert('connection_history', {
-                'host': c.host,
-                'port': c.port,
-                'time': DateTime.now().toIso8601String(),
-              });
-            } catch (_) {}
-          }
-          _connections.clear();
-          final rows = await db.query(
-            'connection_history',
-            columns: ['host', 'port'],
-            orderBy: 'id DESC',
-            limit: _kMaxConnections,
-          );
-          for (final row in rows) {
-            _connections.add(
-              ConnectionProfile(row['host'] as String, row['port'] as int),
-            );
-          }
-        } catch (_) {}
-      }
-      try {
-        await configFile.delete();
-      } catch (_) {}
     }
   }
 

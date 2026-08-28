@@ -32,7 +32,7 @@ TCP 与 MQTT 调试能力，适用于协议调试、物联网设备联调等场�
 ## 运行
 
 ```bash
-cd tcp_flutter
+cd debug_tools
 flutter pub get
 
 flutter run -d windows   # Windows 桌面
