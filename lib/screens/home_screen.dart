@@ -42,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _connectionInitialized = false;
   String? _connectionError;
   bool _sending = false;
+  bool _connectionExpanded = true;
   bool _commandExpanded = true;
   bool _focusMode = false;
 
@@ -92,9 +93,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() => _connectionError = null);
     await _service.connect(host, port);
-    if (_service.status != TcpStatus.connected) {
-      setState(() => _connectionError = '连接失败，请检查地址和端口是否正确');
-    }
+    if (!mounted) return;
+    setState(() {
+      if (_service.status == TcpStatus.connected) {
+        _connectionExpanded = false;
+      } else {
+        _connectionError = '连接失败，请检查地址和端口是否正确';
+      }
+    });
   }
 
   /// 发送回调（SendComposer 已展开/校验内容）：更新发送中状态并交给 TcpService。
@@ -330,6 +336,38 @@ class _HomeScreenState extends State<HomeScreen> {
             : (connecting
                   ? Colors.orange
                   : Theme.of(context).colorScheme.onSurfaceVariant);
+        final endpoint = _hostCtrl.text.trim().isEmpty
+            ? '未配置服务器'
+            : '${_hostCtrl.text.trim()}:${_portCtrl.text.trim()}';
+        Widget connectionButton({required bool collapsed}) {
+          return FilledButton.icon(
+            style: collapsed
+                ? FilledButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    visualDensity: VisualDensity.compact,
+                  )
+                : null,
+            onPressed: connecting
+                ? null
+                : (connected ? _service.disconnect : _connect),
+            icon: connecting
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    connected ? Icons.link_off : Icons.link,
+                    size: collapsed ? 16 : null,
+                  ),
+            label: Text(
+              connected
+                  ? (collapsed ? '断开' : '断开连接')
+                  : (connecting ? '连接中…' : '连接'),
+            ),
+          );
+        }
+
         final fields = Row(
           children: [
             Expanded(
@@ -354,8 +392,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             return;
                           }
                           final c = conns[v];
-                          _hostCtrl.text = c.host;
-                          _portCtrl.text = c.port.toString();
+                          setState(() {
+                            _hostCtrl.text = c.host;
+                            _portCtrl.text = c.port.toString();
+                            _connectionError = null;
+                          });
                         },
                         itemBuilder: (context) => [
                           for (var i = 0; i < conns.length; i++)
@@ -420,17 +461,36 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (!compact) ...[
-                      const Spacer(),
-                      Text(
-                        '${_hostCtrl.text}:${_portCtrl.text}',
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        endpoint,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    ),
+                    if (!_connectionExpanded) ...[
+                      const SizedBox(width: 8),
+                      connectionButton(collapsed: true),
                     ],
+                    IconButton(
+                      tooltip: _connectionExpanded ? '收起连接配置' : '展开连接配置',
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(
+                        _connectionExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                      ),
+                      onPressed: () => setState(
+                        () => _connectionExpanded = !_connectionExpanded,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                fields,
+                if (_connectionExpanded) ...[
+                  const SizedBox(height: 12),
+                  fields,
+                ],
                 if (_connectionError != null) ...[
                   const SizedBox(height: 6),
                   Text(
@@ -441,21 +501,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  onPressed: connecting
-                      ? null
-                      : (connected ? _service.disconnect : _connect),
-                  icon: connecting
-                      ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(connected ? Icons.link_off : Icons.link),
-                  label: Text(
-                    connected ? '断开连接' : (connecting ? '正在连接…' : '连接'),
-                  ),
-                ),
+                if (_connectionExpanded) ...[
+                  const SizedBox(height: 10),
+                  connectionButton(collapsed: false),
+                ],
               ],
             ),
           ),
