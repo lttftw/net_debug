@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../models/message_display_style.dart';
+
 /// 日志/记录单条展示（TCP 与 MQTT 通用）：
-/// 上行 = 时间戳 + 类型标签（+ 可选主题），下行 = 带背景色的等宽消息文本。
+/// 上行 = 时间戳 + 类型标签（+ 可选主题），下行 = 轻量底色的等宽消息文本。
 class LogLineView extends StatelessWidget {
   final DateTime time;
   final String tag;
@@ -9,6 +11,7 @@ class LogLineView extends StatelessWidget {
   final Color? backgroundColor;
   final String message;
   final double fontSize;
+  final MessageDisplayStyle displayStyle;
 
   /// 可选主题/来源标签，显示在时间戳行
   final String? label;
@@ -21,12 +24,14 @@ class LogLineView extends StatelessWidget {
     this.backgroundColor,
     required this.message,
     required this.fontSize,
+    required this.displayStyle,
     this.label,
   });
 
   @override
   Widget build(BuildContext context) {
     final fillColor = backgroundColor ?? color;
+    final displayMessage = formatMessageForDisplay(message, displayStyle);
     final t = time;
     final timeText =
         '${t.hour.toString().padLeft(2, '0')}:'
@@ -91,14 +96,9 @@ class LogLineView extends StatelessWidget {
                 alpha: backgroundColor == null ? 0.08 : 0.18,
               ),
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: fillColor.withValues(
-                  alpha: backgroundColor == null ? 0.25 : 0.45,
-                ),
-              ),
             ),
             child: SelectableText(
-              message,
+              displayMessage,
               style: TextStyle(
                 color: color,
                 fontSize: fontSize,

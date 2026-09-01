@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../models/message_display_style.dart';
+
 /// 全局主题配色统一管理。
 /// 深色/浅色模式各自维护一套主色与收发记录色，切换亮度自动使用对应配置；
-/// 日志字体大小全局共享。所有颜色均由此服务读取，不在界面代码中硬编码。
+/// 消息显示样式与日志字体大小全局共享。所有颜色均由此服务读取，
+/// 不在界面代码中硬编码。
 class ThemeService extends ChangeNotifier {
   // 深色模式预设（青蓝 + 亮色 TX/RX，深背景上清晰）
   static const _kDarkSeed = Color(0xFF26C6DA);
@@ -26,9 +29,11 @@ class ThemeService extends ChangeNotifier {
   Color _lightRx = _kLightRx;
   bool _dark = true;
   double _logFontSize = 12;
+  MessageDisplayStyle _messageDisplayStyle = MessageDisplayStyle.formattedJson;
 
   bool get isDark => _dark;
   double get logFontSize => _logFontSize;
+  MessageDisplayStyle get messageDisplayStyle => _messageDisplayStyle;
 
   /// 当前亮度模式下生效的颜色
   Color get seedColor => _dark ? _darkSeed : _lightSeed;
@@ -67,7 +72,7 @@ class ThemeService extends ChangeNotifier {
         margin: EdgeInsets.zero,
         color: scheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .7)),
         ),
       ),
@@ -75,11 +80,11 @@ class ThemeService extends ChangeNotifier {
         filled: true,
         fillColor: scheme.surfaceContainerLowest,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(6),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -91,7 +96,7 @@ class ThemeService extends ChangeNotifier {
         height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(6),
         ),
       ),
       navigationRailTheme: const NavigationRailThemeData(
@@ -101,17 +106,13 @@ class ThemeService extends ChangeNotifier {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 46),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 46),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
       ),
     );
@@ -147,6 +148,7 @@ class ThemeService extends ChangeNotifier {
         final lightRx = map['lightRx'] as int?;
         final dark = map['dark'] as bool?;
         final logFontSize = map['logFontSize'] as num?;
+        final messageDisplayStyle = map['messageDisplayStyle'] as String?;
         if (darkSeed != null) {
           _darkSeed = Color(darkSeed);
         } else if (legacySeed != null) {
@@ -167,6 +169,12 @@ class ThemeService extends ChangeNotifier {
         if (lightRx != null) _lightRx = Color(lightRx);
         if (dark != null) _dark = dark;
         if (logFontSize != null) _logFontSize = logFontSize.toDouble();
+        if (messageDisplayStyle != null) {
+          _messageDisplayStyle = MessageDisplayStyle.values.firstWhere(
+            (style) => style.name == messageDisplayStyle,
+            orElse: () => MessageDisplayStyle.formattedJson,
+          );
+        }
       }
     } catch (_) {}
     notifyListeners();
@@ -215,6 +223,12 @@ class ThemeService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setMessageDisplayStyle(MessageDisplayStyle style) async {
+    _messageDisplayStyle = style;
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> reset() async {
     _darkSeed = _kDarkSeed;
     _darkTx = _kDarkTx;
@@ -224,6 +238,7 @@ class ThemeService extends ChangeNotifier {
     _lightRx = _kLightRx;
     _dark = true;
     _logFontSize = 12;
+    _messageDisplayStyle = MessageDisplayStyle.formattedJson;
     await _save();
     notifyListeners();
   }
@@ -242,6 +257,7 @@ class ThemeService extends ChangeNotifier {
           'lightRx': _lightRx.toARGB32(),
           'dark': _dark,
           'logFontSize': _logFontSize,
+          'messageDisplayStyle': _messageDisplayStyle.name,
         }),
       );
     } catch (_) {}

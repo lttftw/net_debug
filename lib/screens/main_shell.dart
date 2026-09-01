@@ -57,7 +57,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _globalLog.dispose();
     _tcpService.dispose();
-    _mqttService.disconnect();
+    _mqttService.dispose();
     _brokerService.dispose();
     _topicTemplates.dispose();
     _vars.dispose();

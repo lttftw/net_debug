@@ -5,6 +5,7 @@ import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
+import 'about_screen.dart';
 import 'history_screen.dart';
 import 'log_viewer_screen.dart';
 import 'protocol_docs_screen.dart';
@@ -159,7 +160,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _entryTile(
           icon: Icons.palette_outlined,
           title: '主题外观',
-          subtitle: '亮暗模式、主色与日志字号',
+          subtitle: '亮暗模式、配色、消息样式与日志字号',
           onTap: () => _open(ThemeScreen(theme: _theme)),
         ),
       ]),
@@ -184,9 +185,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: '${_globalLog.logs.length} 条日志，统一查看各模块运行记录',
           onTap: () => _open(LogViewerScreen(service: _globalLog)),
         ),
-        const ListTile(
-          leading: Icon(Icons.info_outline),
-          title: Text('TCP / MQTT 调试工具'),
+        _entryTile(
+          icon: Icons.info_outline,
+          title: '关于与更新',
+          subtitle: '版本信息、开源仓库与检查更新',
+          onTap: () => _open(const AboutScreen()),
         ),
       ]),
     ];

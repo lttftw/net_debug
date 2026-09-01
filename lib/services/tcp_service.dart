@@ -130,9 +130,12 @@ class TcpService extends ChangeNotifier {
   /// 是否有被隐藏的内置预设（用于显示"恢复全部"入口）
   bool get hasHiddenBuiltins {
     // 内置预设总数 - 当前显示的内置预设数 > 0 表示有隐藏
-    int builtinShown = _quickCommands.where((q) => q.isBuiltin || q.isOverride).length;
+    int builtinShown = _quickCommands
+        .where((q) => q.isBuiltin || q.isOverride)
+        .length;
     return builtinShown < _presets.length;
   }
+
   bool get autoScroll => _autoScroll;
   bool get busy => _pending != null;
 
@@ -366,11 +369,9 @@ class TcpService extends ChangeNotifier {
     final result = Completer<Map<String, dynamic>>();
     await _enqueue(() async {
       try {
-        result.complete(await _sendCommandRaw(
-          trimmed,
-          timeout,
-          recordHistory: recordHistory,
-        ));
+        result.complete(
+          await _sendCommandRaw(trimmed, timeout, recordHistory: recordHistory),
+        );
       } catch (e) {
         result.completeError(e);
       }
@@ -419,7 +420,7 @@ class TcpService extends ChangeNotifier {
     try {
       s.add(utf8.encode('$data\n'));
       await s.flush();
-      _addLog(LogKind.tx, _prettyJson(data));
+      _addLog(LogKind.tx, data);
       if (recordHistory) _addToHistory(data);
       notifyListeners();
       await completer.future;
@@ -449,7 +450,7 @@ class TcpService extends ChangeNotifier {
     try {
       s.add(utf8.encode('$trimmed\n'));
       await s.flush();
-      _addLog(LogKind.tx, _prettyJson(trimmed));
+      _addLog(LogKind.tx, trimmed);
       if (recordHistory) _addToHistory(trimmed);
       notifyListeners();
       final line = await completer.future;
@@ -624,7 +625,7 @@ class TcpService extends ChangeNotifier {
       final line = _buffer.substring(0, idx).trim();
       _buffer = _buffer.substring(idx + 1);
       if (line.isEmpty) continue;
-      _addLog(LogKind.rx, _prettyJson(line));
+      _addLog(LogKind.rx, line);
       final p = _pending;
       if (p != null) {
         _pending = null;
@@ -684,16 +685,6 @@ class TcpService extends ChangeNotifier {
       _pending = null;
       _pendingTimer?.cancel();
       p.completeError(Exception(reason));
-    }
-  }
-
-  /// 尝试美化 JSON，失败则原样返回
-  String _prettyJson(String text) {
-    try {
-      final obj = jsonDecode(text);
-      return const JsonEncoder.withIndent('  ').convert(obj);
-    } catch (_) {
-      return text;
     }
   }
 
@@ -951,7 +942,11 @@ class TcpService extends ChangeNotifier {
   }
 
   /// 新增自定义快捷指令（追加到列表末尾）
-  Future<void> addQuickCommand(String label, String command, {String? hint}) async {
+  Future<void> addQuickCommand(
+    String label,
+    String command, {
+    String? hint,
+  }) async {
     final db = _db;
     if (db == null) return;
     try {
@@ -960,7 +955,8 @@ class TcpService extends ChangeNotifier {
         'command': command,
         'hint': hint,
       });
-      final maxOrder = Sqflite.firstIntValue(
+      final maxOrder =
+          Sqflite.firstIntValue(
             await db.rawQuery(
               'SELECT COALESCE(MAX(sort_order), 0) FROM quick_command_order',
             ),
@@ -978,8 +974,12 @@ class TcpService extends ChangeNotifier {
   }
 
   /// 更新自定义/覆盖快捷指令
-  Future<void> updateQuickCommand(int id, String label, String command,
-      {String? hint}) async {
+  Future<void> updateQuickCommand(
+    int id,
+    String label,
+    String command, {
+    String? hint,
+  }) async {
     final db = _db;
     if (db == null) return;
     try {
@@ -1013,8 +1013,12 @@ class TcpService extends ChangeNotifier {
   }
 
   /// 修改内置预设：保存为覆盖项（原内置仍可恢复）
-  Future<void> overrideBuiltin(int index, String label, String command,
-      {String? hint}) async {
+  Future<void> overrideBuiltin(
+    int index,
+    String label,
+    String command, {
+    String? hint,
+  }) async {
     final db = _db;
     if (db == null) return;
     try {
@@ -1082,10 +1086,7 @@ class TcpService extends ChangeNotifier {
     final db = _db;
     if (db == null) return;
     try {
-      await db.delete(
-        'quick_commands',
-        where: 'override_index < 0',
-      );
+      await db.delete('quick_commands', where: 'override_index < 0');
       await loadQuickCommands();
     } catch (_) {
       // 忽略存储错误

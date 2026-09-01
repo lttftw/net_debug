@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/topic_template.dart';
+import '../models/message_display_style.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
 import '../services/theme_service.dart';
@@ -561,8 +562,8 @@ class _MqttScreenState extends State<MqttScreen> {
     EdgeInsets margin = const EdgeInsets.symmetric(horizontal: 12),
   }) {
     final logs = _service.logs;
-    return Card(
-      margin: margin,
+    return Padding(
+      padding: margin,
       child: logs.isEmpty
           ? const Center(
               child: Text(
@@ -580,6 +581,7 @@ class _MqttScreenState extends State<MqttScreen> {
                 txColor: _theme.effectiveTxColor,
                 rxColor: _theme.effectiveRxColor,
                 fontSize: _theme.logFontSize,
+                displayStyle: _theme.messageDisplayStyle,
               ),
             ),
     );
@@ -677,6 +679,7 @@ class _RecordTile extends StatelessWidget {
   final Color txColor;
   final Color rxColor;
   final double fontSize;
+  final MessageDisplayStyle displayStyle;
 
   const _RecordTile({
     required this.entry,
@@ -684,6 +687,7 @@ class _RecordTile extends StatelessWidget {
     required this.txColor,
     required this.rxColor,
     required this.fontSize,
+    required this.displayStyle,
   });
 
   @override
@@ -710,6 +714,7 @@ class _RecordTile extends StatelessWidget {
       backgroundColor: topicBackground,
       message: entry.message,
       fontSize: fontSize,
+      displayStyle: displayStyle,
       label: entry.topic,
     );
   }

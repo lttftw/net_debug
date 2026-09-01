@@ -85,9 +85,8 @@ class _SendComposerState extends State<SendComposer> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _formatPayload() {
@@ -101,8 +100,8 @@ class _SendComposerState extends State<SendComposer> {
       _snack('JSON 语法错误: $err');
       return;
     }
-    widget.controller.text =
-        const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
+    widget.controller.text = const JsonEncoder.withIndent('  ')
+        .convert(jsonDecode(text));
   }
 
   void _clear() {
@@ -189,8 +188,9 @@ class _SendComposerState extends State<SendComposer> {
                       onTap: () {
                         Navigator.pop(ctx);
                         widget.controller.text = entry;
-                        widget.controller.selection =
-                            TextSelection.collapsed(offset: entry.length);
+                        widget.controller.selection = TextSelection.collapsed(
+                          offset: entry.length,
+                        );
                         setState(() {});
                       },
                     ),
@@ -267,9 +267,9 @@ class _SendComposerState extends State<SendComposer> {
 
   /// 操作按钮统一样式：40×40 圆角矩形，不高过同行其他按钮。
   ButtonStyle get _squareButtonStyle => IconButton.styleFrom(
-        fixedSize: const Size.square(40),
-        padding: EdgeInsets.zero,
-      );
+    fixedSize: const Size.square(40),
+    padding: EdgeInsets.zero,
+  );
 
   /// JSON/文本格式切换：紧凑圆角矩形分段控件，仅文字、无图标。
   Widget _buildFormatSwitcher() {
@@ -279,7 +279,7 @@ class _SendComposerState extends State<SendComposer> {
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -295,7 +295,7 @@ class _SendComposerState extends State<SendComposer> {
     final scheme = Theme.of(context).colorScheme;
     final selected = _format == value;
     return InkWell(
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(4),
       onTap: () => setState(() => _format = value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -305,7 +305,7 @@ class _SendComposerState extends State<SendComposer> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? scheme.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(4),
           boxShadow: selected
               ? [
                   BoxShadow(

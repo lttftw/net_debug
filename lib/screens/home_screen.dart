@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/command_preset.dart';
+import '../models/message_display_style.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
@@ -664,8 +665,8 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: Listenable.merge([_service, _theme]),
       builder: (context, _) {
         final logs = _service.logs;
-        return Card(
-          margin: margin,
+        return Padding(
+          padding: margin,
           child: logs.isEmpty
               ? Center(
                   child: Column(
@@ -695,6 +696,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     txColor: _theme.effectiveTxColor,
                     rxColor: _theme.effectiveRxColor,
                     fontSize: _theme.logFontSize,
+                    displayStyle: _theme.messageDisplayStyle,
                   ),
                 ),
         );
@@ -870,12 +872,14 @@ class _LogTile extends StatelessWidget {
   final Color txColor;
   final Color rxColor;
   final double fontSize;
+  final MessageDisplayStyle displayStyle;
 
   const _LogTile({
     required this.entry,
     required this.txColor,
     required this.rxColor,
     required this.fontSize,
+    required this.displayStyle,
   });
 
   @override
@@ -892,6 +896,7 @@ class _LogTile extends StatelessWidget {
       color: color,
       message: entry.message,
       fontSize: fontSize,
+      displayStyle: displayStyle,
     );
   }
 }

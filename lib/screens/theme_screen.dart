@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/message_display_style.dart';
 import '../services/theme_service.dart';
 
 /// 二级页：主题外观设置。主色（seed）与收发记录色统一在此配置。
@@ -24,7 +25,10 @@ class _ThemeScreenState extends State<ThemeScreen> {
     ('紫色', Color(0xFF9C27B0)),
   ];
 
-  Future<void> _pickColor(Color current, Future<void> Function(Color) set) async {
+  Future<void> _pickColor(
+    Color current,
+    Future<void> Function(Color) set,
+  ) async {
     final picked = await showDialog<Color>(
       context: context,
       builder: (ctx) => _ColorPicker(current: current),
@@ -79,8 +83,8 @@ class _ThemeScreenState extends State<ThemeScreen> {
                     for (final (name, color) in _presets)
                       ChoiceChip(
                         label: Text(name),
-                        selected: _theme.seedColor.toARGB32() ==
-                            color.toARGB32(),
+                        selected:
+                            _theme.seedColor.toARGB32() == color.toARGB32(),
                         onSelected: (_) => _theme.setSeed(color),
                       ),
                     ActionChip(
@@ -89,10 +93,8 @@ class _ThemeScreenState extends State<ThemeScreen> {
                         radius: 10,
                       ),
                       label: const Text('自定义'),
-                      onPressed: () => _pickColor(
-                        _theme.seedColor,
-                        _theme.setSeed,
-                      ),
+                      onPressed: () =>
+                          _pickColor(_theme.seedColor, _theme.setSeed),
                     ),
                   ],
                 ),
@@ -108,6 +110,35 @@ class _ThemeScreenState extends State<ThemeScreen> {
                 title: '接收 (RX)',
                 color: _theme.rxColor,
                 onTap: () => _pickColor(_theme.rxColor, _theme.setRx),
+              ),
+              const Divider(height: 24),
+              _sectionTitle('消息默认显示样式'),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'JSON 格式化仅作用于有效 JSON，普通文本保持原样',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SegmentedButton<MessageDisplayStyle>(
+                  segments: const [
+                    ButtonSegment(
+                      value: MessageDisplayStyle.original,
+                      label: Text('原始文本'),
+                      icon: Icon(Icons.subject, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: MessageDisplayStyle.formattedJson,
+                      label: Text('JSON 格式化'),
+                      icon: Icon(Icons.data_object, size: 16),
+                    ),
+                  ],
+                  selected: {_theme.messageDisplayStyle},
+                  onSelectionChanged: (styles) =>
+                      _theme.setMessageDisplayStyle(styles.first),
+                ),
               ),
               const Divider(height: 24),
               _sectionTitle('日志字体大小'),
@@ -143,7 +174,7 @@ class _ThemeScreenState extends State<ThemeScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _theme.reset,
                   icon: const Icon(Icons.restore, size: 18),
-                  label: const Text('恢复默认配色'),
+                  label: const Text('恢复默认外观'),
                 ),
               ),
             ],
@@ -167,10 +198,7 @@ class _ThemeScreenState extends State<ThemeScreen> {
   }) {
     return ListTile(
       dense: true,
-      leading: CircleAvatar(
-        backgroundColor: color,
-        radius: 12,
-      ),
+      leading: CircleAvatar(backgroundColor: color, radius: 12),
       title: Text(title),
       subtitle: Text(
         '#${color.toARGB32().toRadixString(16).toUpperCase().padLeft(8, '0')}',
@@ -196,10 +224,18 @@ class _ColorPickerState extends State<_ColorPicker> {
   late Color _color = widget.current;
 
   static const _palette = <Color>[
-    Color(0xFFF44336), Color(0xFFFF9800), Color(0xFFFFEB3B),
-    Color(0xFF4CAF50), Color(0xFF009688), Color(0xFF26C6DA),
-    Color(0xFF2196F3), Color(0xFF3F51B5), Color(0xFF9C27B0),
-    Color(0xFFE91E63), Color(0xFF795548), Color(0xFF607D8B),
+    Color(0xFFF44336),
+    Color(0xFFFF9800),
+    Color(0xFFFFEB3B),
+    Color(0xFF4CAF50),
+    Color(0xFF009688),
+    Color(0xFF26C6DA),
+    Color(0xFF2196F3),
+    Color(0xFF3F51B5),
+    Color(0xFF9C27B0),
+    Color(0xFFE91E63),
+    Color(0xFF795548),
+    Color(0xFF607D8B),
   ];
 
   @override
@@ -260,13 +296,30 @@ class _ColorPickerState extends State<_ColorPicker> {
   }
 
   Color _withR(double v) => Color.from(
-      alpha: _color.a, red: v / 255, green: _color.g, blue: _color.b);
+    alpha: _color.a,
+    red: v / 255,
+    green: _color.g,
+    blue: _color.b,
+  );
   Color _withG(double v) => Color.from(
-      alpha: _color.a, red: _color.r, green: v / 255, blue: _color.b);
+    alpha: _color.a,
+    red: _color.r,
+    green: v / 255,
+    blue: _color.b,
+  );
   Color _withB(double v) => Color.from(
-      alpha: _color.a, red: _color.r, green: _color.g, blue: v / 255);
+    alpha: _color.a,
+    red: _color.r,
+    green: _color.g,
+    blue: v / 255,
+  );
 
-  Widget _slider(String label, double value, double max, ValueChanged<double> on) {
+  Widget _slider(
+    String label,
+    double value,
+    double max,
+    ValueChanged<double> on,
+  ) {
     return Row(
       children: [
         SizedBox(
