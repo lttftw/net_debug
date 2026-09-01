@@ -58,6 +58,7 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    environment: 'apk builder'
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
