@@ -50,6 +50,17 @@ flutter run -d windows   # Windows 桌面
 flutter run -d <device>  # Android 等移动设备
 ```
 
+## 自动构建
+
+仓库内置 GitHub Actions 工作流 `.github/workflows/build.yml`：
+
+- 推送到 `main`、提交 Pull Request、推送 `v*` 标签或手动触发时运行
+- 先执行 `flutter analyze` 与全部测试，通过后并行构建 Android 和 Windows
+- 在 Actions 运行记录中提供 APK 与 Windows x64 ZIP，保留 14 天
+
+当前未配置 Android 正式签名密钥时，Gradle 会按项目现有规则使用 debug
+签名。它适合内部安装验证，不应直接作为应用商店或正式 Release 安装包。
+
 ## 使用说明
 
 1. **TCP**：输入服务器地址与端口，点击「连接」；在输入框发送指令，
