@@ -58,6 +58,11 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -79,17 +84,54 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Require signing secrets for releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          missing=()
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_STORE_PASSWORD \
+            ANDROID_KEY_PASSWORD \
+            ANDROID_KEY_ALIAS
+          do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing required Android signing secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Restore Android signing key
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" \
+            | base64 --decode > android/app/upload-keystore.jks
+          {
+            printf 'storePassword=%s\n' "$ANDROID_STORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'storeFile=upload-keystore.jks\n'
+          } > android/key.properties
+
       - name: Build release APK
         run: flutter build apk --release
 
       - name: Stage APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/debug-tools-android.apk
+        shell: bash
+        run: |
+          app_version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "build/debug-tools-v${app_version}-android.apk"
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v7
         with:
           name: debug-tools-android
-          path: build/debug-tools-android.apk
+          path: build/debug-tools-v*-android.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -117,15 +159,56 @@ jobs:
 
       - name: Package Windows release
         shell: pwsh
-        run: >-
-          Compress-Archive
-          -Path 'build\windows\x64\runner\Release\*'
-          -DestinationPath 'build\debug-tools-windows-x64.zip'
+        run: |
+          $versionLine = Select-String -Path 'pubspec.yaml' -Pattern '^version:'
+          $appVersion = ($versionLine.Line -replace '^version:\s*', '') -replace '\+.*$', ''
+          Compress-Archive `
+            -Path 'build\windows\x64\runner\Release\*' `
+            -DestinationPath "build\debug-tools-v$appVersion-windows-x64.zip"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
           name: debug-tools-windows-x64
-          path: build/debug-tools-windows-x64.zip
+          path: build/debug-tools-v*-windows-x64.zip
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [quality, android, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: debug-tools-android
+          path: release
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: debug-tools-windows-x64
+          path: release
+
+      - name: Generate checksums
+        shell: bash
+        run: cd release && sha256sum * > SHA256SUMS.txt
+
+      - name: Create or update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

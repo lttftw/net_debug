@@ -56,10 +56,14 @@ flutter run -d <device>  # Android 等移动设备
 
 - 推送到 `main`、提交 Pull Request、推送 `v*` 标签或手动触发时运行
 - 先执行 `flutter analyze` 与全部测试，通过后并行构建 Android 和 Windows
-- 在 Actions 运行记录中提供 APK 与 Windows x64 ZIP，保留 14 天
+- 在 Actions 运行记录中提供带版本号的 APK 与 Windows x64 ZIP，保留 14 天
+- 推送与 `pubspec.yaml` 版本一致的 `v*` 标签时，自动创建正式 GitHub
+  Release，并附加 APK、Windows ZIP 与 `SHA256SUMS.txt`
 
-当前未配置 Android 正式签名密钥时，Gradle 会按项目现有规则使用 debug
-签名。它适合内部安装验证，不应直接作为应用商店或正式 Release 安装包。
+Android 正式发布使用仓库 Actions Secrets 中的
+`ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、
+`ANDROID_KEY_PASSWORD` 和 `ANDROID_KEY_ALIAS`。普通构建未配置密钥时仍会按
+项目现有规则回退到 debug 签名；标签发布则强制要求四项签名 Secret 完整。
 
 ## 使用说明
 
