@@ -10,6 +10,7 @@ import 'log_viewer_screen.dart';
 import 'protocol_docs_screen.dart';
 import 'quick_commands_screen.dart';
 import 'theme_screen.dart';
+import 'tools_screen.dart';
 import 'topic_template_screen.dart';
 import 'variables_screen.dart';
 
@@ -74,7 +75,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                Expanded(child: sections[1]),
+                                Expanded(
+                                  child: Column(
+                                    children: [sections[1], sections[3]],
+                                  ),
+                                ),
                               ],
                             ),
                           ]
@@ -156,6 +161,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '主题外观',
           subtitle: '亮暗模式、主色与日志字号',
           onTap: () => _open(ThemeScreen(theme: _theme)),
+        ),
+      ]),
+      _sectionBlock('小工具', [
+        _entryTile(
+          icon: Icons.build_circle_outlined,
+          title: '小工具合集',
+          subtitle: '文本与二维码互转等独立小工具',
+          onTap: () => _open(const ToolsScreen()),
         ),
       ]),
       _sectionBlock('帮助', [
