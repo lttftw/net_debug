@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/command_preset.dart';
 import '../services/tcp_service.dart';
 import '../services/variables_service.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/variable_text_field.dart';
 
 /// 二级页：快捷指令管理（TCP 工具）
@@ -243,9 +244,7 @@ class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
     final command = cmdCtrl.text.trim();
     final hint = hintCtrl.text.trim();
     if (label.isEmpty || command.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('名称和指令不能为空')),
-      );
+      showAppToast(context, '名称和指令不能为空');
       return;
     }
     final hintOrNull = hint.isEmpty ? null : hint;

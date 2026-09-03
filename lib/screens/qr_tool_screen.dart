@@ -11,6 +11,8 @@ import 'package:image/image.dart' as img;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:zxing2/qrcode.dart';
 
+import '../widgets/app_toast.dart';
+
 /// 二级页：文本与二维码互转工具。
 ///
 /// 纯 Dart 实现：
@@ -191,14 +193,7 @@ class _QrToolScreenState extends State<QrToolScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+    showAppToast(context, message);
   }
 
   // ---------- 构建 ----------

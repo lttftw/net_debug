@@ -9,6 +9,7 @@ import '../models/message_display_style.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
@@ -121,20 +122,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _cmdFocus.requestFocus();
     final missing = _vars.emptyVariableNames(qc.command);
     if (missing.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
-            '发送前请先在「设置 · 模板变量」中填写',
-          ),
-        ),
+      showAppToast(
+        context,
+        '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
+        '发送前请先在「设置 · 模板变量」中填写',
+        duration: const Duration(seconds: 3),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已填入快捷指令「${qc.label}」，可编辑后发送'),
-          duration: const Duration(seconds: 2),
-        ),
+      showAppToast(
+        context,
+        '已填入快捷指令「${qc.label}」，可编辑后发送',
+        duration: const Duration(seconds: 2),
       );
     }
   }

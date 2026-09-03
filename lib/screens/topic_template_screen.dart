@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/topic_template.dart';
 import '../services/topic_template_service.dart';
+import '../widgets/app_toast.dart';
 
 /// 二级页：主题模板管理（模板组 + 组内模板的增删改）。
 /// 改动实时写入 TopicTemplateService，MQTT 页下拉选择模板时即时生效。
@@ -346,8 +347,6 @@ class _TopicTemplateScreenState extends State<TopicTemplateScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-    );
+    showAppToast(context, message);
   }
 }

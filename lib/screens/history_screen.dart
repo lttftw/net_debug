@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/tcp_service.dart';
+import '../widgets/app_toast.dart';
 
 /// 二级页：历史记录清理（TCP 工具）
 class HistoryScreen extends StatefulWidget {
@@ -135,9 +136,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (ok != true) return;
     await action();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已清空')),
-      );
+      showAppToast(context, '已清空');
     }
   }
 }

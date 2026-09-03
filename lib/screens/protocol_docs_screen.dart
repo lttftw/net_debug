@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../widgets/app_toast.dart';
+
 /// 二级页：内嵌指令协议文档（Markdown 渲染，带悬浮目录）。
 ///
 /// 加载机制（懒加载）：
@@ -625,14 +627,7 @@ class _CopyButtonState extends State<_CopyButton> {
     _timer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) setState(() => _copied = false);
     });
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('已复制到剪贴板'),
-          duration: Duration(milliseconds: 1200),
-        ),
-      );
+    showAppToast(context, '已复制到剪贴板');
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/variables_service.dart';
+import '../widgets/app_toast.dart';
 
 /// 二级页：模板变量统一管理。
 /// 所有模板（MQTT 主题模板 / client id / 快捷指令等）中的 `{变量名}`
@@ -162,9 +163,7 @@ class _VariablesScreenState extends State<VariablesScreen> {
     final value = valueCtrl.text.trim();
     final hint = hintCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('变量名不能为空')),
-      );
+      showAppToast(context, '变量名不能为空');
       return;
     }
     if (existing == null) {

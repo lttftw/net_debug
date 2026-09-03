@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/variables_service.dart';
+import 'app_toast.dart';
 import 'variable_text_field.dart';
 
 /// 发送内容格式
@@ -85,8 +86,7 @@ class _SendComposerState extends State<SendComposer> {
   }
 
   void _snack(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    showAppToast(context, message);
   }
 
   void _formatPayload() {

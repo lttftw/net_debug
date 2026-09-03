@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_update_service.dart';
+import '../widgets/app_toast.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -177,8 +178,6 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showAppToast(context, message);
   }
 }

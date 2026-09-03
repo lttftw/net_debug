@@ -7,6 +7,7 @@ import '../services/mqtt_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
+import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
@@ -119,9 +120,7 @@ class _MqttScreenState extends State<MqttScreen> {
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-    );
+    showAppToast(context, message);
   }
 
   // ---------- 订阅 / 发布 ----------
@@ -849,9 +848,7 @@ class _ConfigPanelState extends State<_ConfigPanel> {
   Future<void> _startBroker() async {
     final error = await _broker.start();
     if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), duration: const Duration(seconds: 3)),
-      );
+      showAppToast(context, error, duration: const Duration(seconds: 3));
     }
   }
 
