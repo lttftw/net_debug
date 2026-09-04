@@ -1,7 +1,7 @@
 [
   {
     "name": "状态查询",
-    "description": "示例：读取设备状态",
+    "description": "示例：MQTT 可用的读取",
     "commands": [
       {
         "label": "状态查询",
@@ -15,7 +15,7 @@
   },
   {
     "name": "数字输出",
-    "description": "示例：控制输出",
+    "description": "示例：输出控制",
     "commands": [
       {
         "label": "输出0开",

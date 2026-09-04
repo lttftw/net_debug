@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/restore_confirm.dart';
 
 /// 二级页：模板变量统一管理。
 /// 所有模板（MQTT 主题模板 / client id / 快捷指令等）中的 `{变量名}`
@@ -76,7 +77,12 @@ class _VariablesScreenState extends State<VariablesScreen> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: OutlinedButton.icon(
-                  onPressed: _service.restoreDefaults,
+                  onPressed: () async {
+                    if (!mounted) return;
+                    if (await confirmRestoreDefaults(context, '模板变量')) {
+                      await _service.restoreDefaults();
+                    }
+                  },
                   icon: const Icon(Icons.restore, size: 18),
                   label: const Text('恢复默认'),
                 ),

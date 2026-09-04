@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../models/topic_template.dart';
+import '../models/command_preset.dart';
 import '../models/message_display_style.dart';
+import '../models/topic_template.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
+import '../services/quick_command_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
@@ -11,6 +13,7 @@ import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
+import 'quick_commands_screen.dart';
 import 'variables_screen.dart';
 
 /// MQTT 工具页：独立的 MQTT 调试客户端，与 TCP 工具完全解耦。
@@ -27,6 +30,9 @@ class MqttScreen extends StatefulWidget {
   final TopicTemplateService topics;
   final ThemeService theme;
 
+  /// MQTT 快捷指令（设备 MQTT 白名单子集，结构与 TCP 快捷指令一致）
+  final QuickCommandService quickCommands;
+
   const MqttScreen({
     super.key,
     required this.service,
@@ -34,6 +40,7 @@ class MqttScreen extends StatefulWidget {
     required this.variables,
     required this.topics,
     required this.theme,
+    required this.quickCommands,
   });
 
   @override
@@ -54,6 +61,7 @@ class _MqttScreenState extends State<MqttScreen> {
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
   TopicTemplateService get _topics => widget.topics;
+  QuickCommandService get _qcs => widget.quickCommands;
 
   @override
   void initState() {
@@ -586,6 +594,109 @@ class _MqttScreenState extends State<MqttScreen> {
     );
   }
 
+  // ---------- MQTT 快捷指令（设备指令，白名单子集） ----------
+
+  /// MQTT 快捷指令入口：组 → 指令二级菜单；点选填入发送内容。
+  Widget _buildQuickCommandBar() {
+    return ListenableBuilder(
+      listenable: _qcs,
+      builder: (context, _) {
+        final groups = _qcs.groups;
+        final hasCommands = _qcs.totalCount > 0;
+        return Row(
+          children: [
+            Expanded(
+              child: hasCommands
+                  ? MenuAnchor(
+                      alignmentOffset: const Offset(0, 6),
+                      menuChildren: [
+                        for (final g in groups)
+                          if (g.commands.isNotEmpty)
+                            SubmenuButton(
+                              menuChildren: [
+                                for (final c in g.commands)
+                                  MenuItemButton(
+                                    leadingIcon: const Icon(Icons.code, size: 16),
+                                    onPressed: () => _applyQuickCommand(c),
+                                    child: Text(c.label),
+                                  ),
+                              ],
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  g.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                      ],
+                      builder: (context, menuController, child) {
+                        return OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(38),
+                          ),
+                          onPressed: () => menuController.isOpen
+                              ? menuController.close()
+                              : menuController.open(),
+                          icon: const Icon(Icons.playlist_play, size: 18),
+                          label: Text('设备指令（${_qcs.totalCount} 条）'),
+                        );
+                      },
+                    )
+                  : OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(38),
+                      ),
+                      onPressed: _openQuickCommandManager,
+                      icon: const Icon(Icons.playlist_add, size: 18),
+                      label: const Text('设备指令（空，点击添加）'),
+                    ),
+            ),
+            const SizedBox(width: 4),
+            Tooltip(
+              message: '管理 MQTT 快捷指令',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.manage_search),
+                onPressed: _openQuickCommandManager,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openQuickCommandManager() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuickCommandsScreen(
+          service: _qcs,
+          variables: _vars,
+          title: 'MQTT 快捷指令',
+        ),
+      ),
+    );
+  }
+
+  /// 把设备指令填入发送内容（展开变量；MQTT 单条 JSON < 512 字节）。
+  void _applyQuickCommand(CommandPreset preset) {
+    _payloadCtrl.text = _vars.expand(preset.command);
+    final missing = _vars.emptyVariableNames(preset.command);
+    if (missing.isNotEmpty) {
+      _showSnack(
+        '变量 ${missing.map((n) => '\$($n)').join('、')} 未填写，'
+        '发送前请先在「设置 · 模板变量」填写',
+      );
+    }
+  }
+
   // ---------- 发布面板（窄屏折叠 / 宽屏右侧常驻） ----------
 
   Widget _buildSendPanel({required bool compact, bool embedded = false}) {
@@ -615,6 +726,8 @@ class _MqttScreenState extends State<MqttScreen> {
                     ),
                 ],
               ),
+              const SizedBox(height: 8),
+              _buildQuickCommandBar(),
               const SizedBox(height: 8),
               Row(
                 children: [

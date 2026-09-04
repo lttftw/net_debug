@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/topic_template.dart';
 import '../services/topic_template_service.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/restore_confirm.dart';
 
 /// 二级页：主题模板管理（模板组 + 组内模板的增删改）。
 /// 改动实时写入 TopicTemplateService，MQTT 页下拉选择模板时即时生效。
@@ -53,7 +54,12 @@ class _TopicTemplateScreenState extends State<TopicTemplateScreen> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: OutlinedButton.icon(
-                  onPressed: _service.restoreDefaults,
+                  onPressed: () async {
+                    if (!mounted) return;
+                    if (await confirmRestoreDefaults(context, '主题模板')) {
+                      await _service.restoreDefaults();
+                    }
+                  },
                   icon: const Icon(Icons.restore, size: 18),
                   label: const Text('恢复默认'),
                 ),

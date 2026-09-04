@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/global_log_service.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
+import '../services/quick_command_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
@@ -31,6 +32,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   final MqttService _mqttService = MqttService();
   final MqttBrokerService _brokerService = MqttBrokerService();
   final TopicTemplateService _topicTemplates = TopicTemplateService();
+  final QuickCommandService _quickCommands = QuickCommandService();
+  final QuickCommandService _mqttQuickCommands = QuickCommandService.mqtt();
   final VariablesService _vars = VariablesService();
   int _index = 0;
 
@@ -45,10 +48,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _brokerService.init(globalLog: _globalLog);
     _globalLog.load();
     _tcpService.loadHistory();
-    _tcpService.loadQuickCommands();
     _tcpService.loadSettings();
     _mqttService.loadConfig();
     _topicTemplates.load();
+    _quickCommands.load();
+    _mqttQuickCommands.load();
     _vars.load();
   }
 
@@ -60,6 +64,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _mqttService.dispose();
     _brokerService.dispose();
     _topicTemplates.dispose();
+    _quickCommands.dispose();
+    _mqttQuickCommands.dispose();
     _vars.dispose();
     super.dispose();
   }
@@ -67,13 +73,19 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      HomeScreen(service: _tcpService, variables: _vars, theme: _theme),
+      HomeScreen(
+        service: _tcpService,
+        variables: _vars,
+        theme: _theme,
+        quickCommands: _quickCommands,
+      ),
       MqttScreen(
         service: _mqttService,
         broker: _brokerService,
         variables: _vars,
         topics: _topicTemplates,
         theme: _theme,
+        quickCommands: _mqttQuickCommands,
       ),
       SettingsScreen(
         service: _tcpService,
@@ -81,6 +93,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         theme: _theme,
         globalLog: _globalLog,
         topics: _topicTemplates,
+        quickCommands: _quickCommands,
+        mqttQuickCommands: _mqttQuickCommands,
       ),
     ];
     return LayoutBuilder(

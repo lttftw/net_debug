@@ -6,25 +6,28 @@ import 'package:flutter/services.dart';
 
 import '../models/command_preset.dart';
 import '../models/message_display_style.dart';
+import '../services/quick_command_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
-import '../widgets/variable_text_field.dart';
+import 'quick_commands_screen.dart';
 
 /// TCP 工具页：连接栏 + 常用指令 + 日志区 + 指令输入
 class HomeScreen extends StatefulWidget {
   final TcpService service;
   final VariablesService variables;
   final ThemeService theme;
+  final QuickCommandService quickCommands;
 
   const HomeScreen({
     super.key,
     required this.service,
     required this.variables,
     required this.theme,
+    required this.quickCommands,
   });
 
   @override
@@ -35,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final TcpService _service = widget.service;
   late final VariablesService _vars = widget.variables;
   late final ThemeService _theme = widget.theme;
+  late final QuickCommandService _qcs = widget.quickCommands;
   final TextEditingController _hostCtrl = TextEditingController();
   final TextEditingController _portCtrl = TextEditingController(text: '8080');
   final TextEditingController _cmdCtrl = TextEditingController();
@@ -115,12 +119,12 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 发送历史（供 SendComposer 回溯）
   List<String> get _tcpHistory => [for (final e in _service.history) e.command];
 
-  /// 快捷指令：点击自动替换变量后填入输入框（不自动发送），便于修改后手动发送。
+  /// 点选一条快捷指令：展开变量后填入输入框（不自动发送），便于修改后手动发送。
   /// 填入时给出 toast 提示；未填写的变量会额外提示，引导去模板变量页填写。
-  void _sendPreset(QuickCommand qc) {
-    _cmdCtrl.text = _vars.expand(qc.command);
+  void _applyPreset(CommandPreset preset) {
+    _cmdCtrl.text = _vars.expand(preset.command);
     _cmdFocus.requestFocus();
-    final missing = _vars.emptyVariableNames(qc.command);
+    final missing = _vars.emptyVariableNames(preset.command);
     if (missing.isNotEmpty) {
       showAppToast(
         context,
@@ -131,10 +135,23 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       showAppToast(
         context,
-        '已填入快捷指令「${qc.label}」，可编辑后发送',
+        '已填入快捷指令「${preset.label}」，可编辑后发送',
         duration: const Duration(seconds: 2),
       );
     }
+  }
+
+  /// 打开快捷指令管理页
+  void _openQuickCommandManager() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuickCommandsScreen(
+          service: _qcs,
+          variables: _vars,
+        ),
+      ),
+    );
   }
 
   /// 清空连接历史（带确认）
@@ -252,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           _buildConnectionBar(compact: false),
                           const SizedBox(height: 12),
-                          _buildPresetPanel(),
+                          _buildQuickCommandBar(),
                           const SizedBox(height: 12),
                           _buildCommandPanel(),
                         ],
@@ -269,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                 child: _buildConnectionBar(compact: true),
               ),
-              _buildPresetBar(),
+              _buildQuickCommandBar(),
               Expanded(child: _buildLogView()),
               _buildInputBar(collapsible: true),
             ],
@@ -511,198 +528,76 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPresetBar() {
-    return SizedBox(
-      height: 46,
-      child: ListenableBuilder(
-        listenable: _service,
-        builder: (context, _) {
-          final items = _service.quickCommands;
-          return ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            itemCount: items.length + 1 + (_service.hasHiddenBuiltins ? 1 : 0),
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
-            itemBuilder: (context, i) {
-              if (i == items.length) {
-                return ActionChip(
-                  avatar: const Icon(Icons.add, size: 16),
-                  label: const Text('添加', style: TextStyle(fontSize: 12)),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _showAddQuickCommand,
-                );
-              }
-              if (i == items.length + 1 && _service.hasHiddenBuiltins) {
-                return ActionChip(
-                  avatar: const Icon(Icons.restore, size: 16),
-                  label: const Text('恢复全部', style: TextStyle(fontSize: 12)),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _service.restoreAllBuiltins(),
-                );
-              }
-              // 跳过末尾的"添加"和"恢复全部"chip，取实际指令
-              final qc = items[i];
-              return GestureDetector(
-                onLongPress: () => _showQuickCommandMenu(qc),
-                child: ActionChip(
-                  label: Text(qc.label, style: const TextStyle(fontSize: 12)),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _sendPreset(qc),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPresetPanel() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListenableBuilder(
-          listenable: _service,
-          builder: (context, _) {
-            final items = _service.quickCommands;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('快捷指令', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  '点击填入编辑器，长按可编辑',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: [
-                    for (final command in items)
-                      GestureDetector(
-                        onLongPress: () => _showQuickCommandMenu(command),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.code, size: 15),
-                          label: Text(command.label),
-                          onPressed: () => _sendPreset(command),
-                        ),
-                      ),
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 16),
-                      label: const Text('添加'),
-                      onPressed: _showAddQuickCommand,
-                    ),
-                    if (_service.hasHiddenBuiltins)
-                      ActionChip(
-                        avatar: const Icon(Icons.restore, size: 16),
-                        label: const Text('恢复全部'),
-                        onPressed: _service.restoreAllBuiltins,
-                      ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  void _showAddQuickCommand() {
-    _showQuickCommandEditor();
-  }
-
-  /// 长按快捷指令弹出操作菜单
-  void _showQuickCommandMenu(QuickCommand qc) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  /// 快捷指令入口：分组二级菜单（组 → 指令）选择填入；右侧提供管理入口。
+  Widget _buildQuickCommandBar() {
+    return ListenableBuilder(
+      listenable: _qcs,
+      builder: (context, _) {
+        final groups = _qcs.groups;
+        final hasCommands = _qcs.totalCount > 0;
+        return Row(
           children: [
-            ListTile(
-              title: Text(
-                qc.label,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                qc.command,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
+            Expanded(
+              child: hasCommands
+                  ? MenuAnchor(
+                      alignmentOffset: const Offset(0, 6),
+                      menuChildren: [
+                        for (final g in groups)
+                          if (g.commands.isNotEmpty)
+                            SubmenuButton(
+                              menuChildren: [
+                                for (final c in g.commands)
+                                  MenuItemButton(
+                                    leadingIcon: const Icon(Icons.code, size: 16),
+                                    onPressed: () => _applyPreset(c),
+                                    child: Text(c.label),
+                                  ),
+                              ],
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  g.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                      ],
+                      builder: (context, menuController, child) {
+                        return OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(40),
+                          ),
+                          onPressed: () => menuController.isOpen
+                              ? menuController.close()
+                              : menuController.open(),
+                          icon: const Icon(Icons.playlist_play, size: 18),
+                          label: Text('快捷指令（${_qcs.totalCount} 条）'),
+                        );
+                      },
+                    )
+                  : OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(40),
+                      ),
+                      onPressed: _openQuickCommandManager,
+                      icon: const Icon(Icons.playlist_add, size: 18),
+                      label: const Text('快捷指令（空，点击添加）'),
+                    ),
             ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('编辑'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showQuickCommandEditor(existing: qc);
-              },
-            ),
-            if (qc.isBuiltin && qc.isOverride)
-              ListTile(
-                leading: const Icon(Icons.restore),
-                title: const Text('恢复默认'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _service.restoreBuiltin(qc.builtinIndex!);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (qc.isBuiltin) {
-                  _service.hideBuiltin(qc.builtinIndex!);
-                } else {
-                  _service.deleteQuickCommand(qc.id!);
-                }
-              },
+            IconButton(
+              tooltip: '管理快捷指令',
+              icon: const Icon(Icons.manage_search),
+              onPressed: _openQuickCommandManager,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// 添加/编辑快捷指令弹窗
-  Future<void> _showQuickCommandEditor({QuickCommand? existing}) async {
-    final result =
-        await showDialog<({String label, String command, String hint})>(
-          context: context,
-          builder: (ctx) =>
-              _QuickCommandEditorDialog(existing: existing, variables: _vars),
         );
-    if (result == null) return;
-
-    final label = result.label.trim();
-    final command = result.command.trim();
-    final hint = result.hint.trim();
-    if (label.isEmpty || command.isEmpty) {
-      _service.addSystemLog('名称和指令不能为空');
-      return;
-    }
-    final hintOrNull = hint.isEmpty ? null : hint;
-    if (existing == null) {
-      await _service.addQuickCommand(label, command, hint: hintOrNull);
-    } else if (existing.isBuiltin) {
-      await _service.overrideBuiltin(
-        existing.builtinIndex!,
-        label,
-        command,
-        hint: hintOrNull,
-      );
-    } else {
-      await _service.updateQuickCommand(
-        existing.id!,
-        label,
-        command,
-        hint: hintOrNull,
-      );
-    }
+      },
+    );
   }
 
   Widget _buildLogView({
@@ -826,89 +721,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 快捷指令编辑弹窗（独立 StatefulWidget，确保 TextEditingController 正确释放）
-class _QuickCommandEditorDialog extends StatefulWidget {
-  final QuickCommand? existing;
-  final VariablesService variables;
-
-  const _QuickCommandEditorDialog({this.existing, required this.variables});
-
-  @override
-  State<_QuickCommandEditorDialog> createState() =>
-      _QuickCommandEditorDialogState();
-}
-
-class _QuickCommandEditorDialogState extends State<_QuickCommandEditorDialog> {
-  late final TextEditingController _labelCtrl;
-  late final TextEditingController _cmdCtrl;
-  late final TextEditingController _hintCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _labelCtrl = TextEditingController(text: widget.existing?.label ?? '');
-    _cmdCtrl = TextEditingController(text: widget.existing?.command ?? '');
-    _hintCtrl = TextEditingController(text: widget.existing?.hint ?? '');
-  }
-
-  @override
-  void dispose() {
-    _labelCtrl.dispose();
-    _cmdCtrl.dispose();
-    _hintCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existing == null ? '添加快捷指令' : '编辑快捷指令'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _labelCtrl,
-              decoration: const InputDecoration(labelText: '名称', isDense: true),
-            ),
-            const SizedBox(height: 8),
-            VariableAwareTextField(
-              controller: _cmdCtrl,
-              variables: widget.variables,
-              maxLines: 3,
-              minLines: 1,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              labelText: '指令 (JSON，支持 \$(变量))',
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _hintCtrl,
-              decoration: const InputDecoration(
-                labelText: '提示（可选）',
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, (
-            label: _labelCtrl.text,
-            command: _cmdCtrl.text,
-            hint: _hintCtrl.text,
-          )),
-          child: const Text('保存'),
-        ),
-      ],
     );
   }
 }

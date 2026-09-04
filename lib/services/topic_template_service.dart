@@ -1,28 +1,30 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../models/topic_template.dart';
+import 'app_state_db.dart';
 
 /// 主题模板统一管理服务。
-/// 首次启动把内置模板组（assets）写入本地文件，之后用户可在
-/// 「设置 · 主题模板」中增删改模板组与模板，改动持久化到本地 JSON。
+///
+/// 首次启动把预设模板组（个人完整版 > 内置完整版 > 示例）写入统一
+/// sqlite 运行时存储；之后用户可在「设置 · 主题模板」中增删改模板组
+/// 与模板。运行时修改一律存 sqlite，程序更新/版本覆盖安装不影响；
+/// 用户删除的组不会被内置默认「复活」。
 class TopicTemplateService extends ChangeNotifier {
-  static const String _fileName = 'topic_templates.json';
   final List<TopicTemplateGroup> _groups = [];
 
   List<TopicTemplateGroup> get groups => List.unmodifiable(_groups);
 
   Future<void> load() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, _fileName));
-      final defaults = await loadTopicTemplateGroups();
-      if (await file.exists()) {
-        final list = jsonDecode(await file.readAsString()) as List;
+      await AppStateDb.instance.migrateFileToKey(
+        AppStateDb.topicTemplatesKey,
+        'topic_templates.json',
+      );
+      final raw = await AppStateDb.instance.read(AppStateDb.topicTemplatesKey);
+      if (raw != null) {
+        final list = jsonDecode(raw) as List;
         _groups
           ..clear()
           ..addAll([
@@ -30,12 +32,11 @@ class TopicTemplateService extends ChangeNotifier {
               if (item is Map)
                 TopicTemplateGroup.fromJson(item.cast<String, dynamic>()),
           ]);
-        // 补齐内置组中缺失的项（不覆盖用户改动）
-        await _mergeDefaults(defaults);
       } else {
+        // 首次运行：以个人完整版模板（缺失则示例）初始化运行时数据
         _groups
           ..clear()
-          ..addAll(defaults);
+          ..addAll(await loadTopicTemplateGroups());
         await _save();
       }
       notifyListeners();
@@ -48,25 +49,11 @@ class TopicTemplateService extends ChangeNotifier {
     }
   }
 
-  /// 把内置组里没出现过（按名称）的组补充到末尾，保证出厂模板不丢失
-  Future<void> _mergeDefaults(List<TopicTemplateGroup> defaults) async {
-    var changed = false;
-    for (final g in defaults) {
-      if (_groups.any((e) => e.name == g.name)) continue;
-      _groups.add(g);
-      changed = true;
-    }
-    if (changed) await _save();
-  }
-
   Future<void> _save() async {
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, _fileName));
-      await file.writeAsString(
-        jsonEncode([for (final g in _groups) g.toJson()]),
-      );
-    } catch (_) {}
+    await AppStateDb.instance.write(
+      AppStateDb.topicTemplatesKey,
+      jsonEncode([for (final g in _groups) g.toJson()]),
+    );
   }
 
   Future<void> restoreDefaults() async {

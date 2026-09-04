@@ -6,9 +6,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart' as mqtt;
 import 'package:mqtt_client/mqtt_server_client.dart' as mqtt_server;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import 'app_state_db.dart';
 import 'global_log_service.dart';
 
 /// MQTT 客户端连接状态
@@ -117,11 +116,22 @@ class MqttService extends ChangeNotifier {
 
   Future<void> loadConfig() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final installationId = await _ensureInstallationId(dir);
-      final file = File(p.join(dir.path, 'mqtt_client_config.json'));
-      if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString());
+      // 迁移旧版 JSON 文件到统一 sqlite（幂等）
+      await AppStateDb.instance
+          .migrateFileToKey(AppStateDb.mqttConfigKey, 'mqtt_client_config.json');
+      await AppStateDb.instance.migrateFileToKey(
+        AppStateDb.mqttSubscriptionsKey,
+        'mqtt_subscriptions.json',
+      );
+      await AppStateDb.instance.migrateFileToKey(
+        AppStateDb.mqttInstallationIdKey,
+        'mqtt_installation_id.txt',
+      );
+      final installationId = await _ensureInstallationId();
+      final configRaw =
+          await AppStateDb.instance.read(AppStateDb.mqttConfigKey);
+      if (configRaw != null) {
+        final json = jsonDecode(configRaw);
         _config = MqttClientConfig.fromJson(
           (json as Map).cast<String, dynamic>(),
         );
@@ -132,11 +142,15 @@ class MqttService extends ChangeNotifier {
         _config = _config.copyWith(
           clientIdTemplate: 'debug_tools_$installationId',
         );
-        await file.writeAsString(jsonEncode(_config.toJson()));
+        await AppStateDb.instance.write(
+          AppStateDb.mqttConfigKey,
+          jsonEncode(_config.toJson()),
+        );
       }
-      final subFile = File(p.join(dir.path, 'mqtt_subscriptions.json'));
-      if (await subFile.exists()) {
-        final list = jsonDecode(await subFile.readAsString()) as List;
+      final subsRaw = await AppStateDb.instance
+          .read(AppStateDb.mqttSubscriptionsKey);
+      if (subsRaw != null) {
+        final list = jsonDecode(subsRaw) as List;
         _subscriptions
           ..clear()
           ..addAll(list.cast<String>());
@@ -150,20 +164,18 @@ class MqttService extends ChangeNotifier {
 
   Future<void> saveConfig(MqttClientConfig cfg) async {
     _config = cfg;
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'mqtt_client_config.json'));
-      await file.writeAsString(jsonEncode(cfg.toJson()));
-    } catch (_) {}
+    await AppStateDb.instance.write(
+      AppStateDb.mqttConfigKey,
+      jsonEncode(cfg.toJson()),
+    );
     notifyListeners();
   }
 
   Future<void> _saveSubscriptions() async {
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'mqtt_subscriptions.json'));
-      await file.writeAsString(jsonEncode(_subscriptions));
-    } catch (_) {}
+    await AppStateDb.instance.write(
+      AppStateDb.mqttSubscriptionsKey,
+      jsonEncode(_subscriptions),
+    );
   }
 
   // ---------- 连接管理 ----------
@@ -462,23 +474,26 @@ class MqttService extends ChangeNotifier {
   bool _usesDefaultClientId(String value) =>
       value.trim().isEmpty || value.trim() == 'debug_tools';
 
-  Future<String> _ensureInstallationId([Directory? supportDir]) {
-    return _installationIdFuture ??= _loadOrCreateInstallationId(supportDir);
+  Future<String> _ensureInstallationId() {
+    return _installationIdFuture ??= _loadOrCreateInstallationId();
   }
 
-  Future<String> _loadOrCreateInstallationId(Directory? supportDir) async {
-    final dir = supportDir ?? await getApplicationSupportDirectory();
-    final file = File(p.join(dir.path, 'mqtt_installation_id.txt'));
+  Future<String> _loadOrCreateInstallationId() async {
     try {
-      if (await file.exists()) {
-        final saved = (await file.readAsString()).trim().toLowerCase();
-        if (RegExp(r'^[0-9a-f]{8}$').hasMatch(saved)) return saved;
+      final saved =
+          await AppStateDb.instance.read(AppStateDb.mqttInstallationIdKey);
+      if (saved != null) {
+        final v = saved.trim().toLowerCase();
+        if (RegExp(r'^[0-9a-f]{8}$').hasMatch(v)) return v;
       }
       final generated = math.Random.secure()
           .nextInt(0x100000000)
           .toRadixString(16)
           .padLeft(8, '0');
-      await file.writeAsString(generated, flush: true);
+      await AppStateDb.instance.write(
+        AppStateDb.mqttInstallationIdKey,
+        generated,
+      );
       return generated;
     } catch (_) {
       // 存储不可用时仍避免回退到全球共用的固定 ID。

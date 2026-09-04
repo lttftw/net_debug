@@ -65,7 +65,7 @@ class _SectionView {
 
 class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
   /// 完整版文档（本地可选，未随公开仓库发布）
-  static const _fullAsset = 'assets/docs/TCP_JSON_PROTOCOL.full.md';
+  static const _fullAsset = 'assets/docs/TCP_JSON_PROTOCOL_full.md';
 
   /// 公开版示范文档（随仓库发布）
   static const _publicAsset = 'assets/docs/TCP_JSON_PROTOCOL.md';

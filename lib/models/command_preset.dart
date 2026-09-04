@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
-/// 常用指令预设（来源：内置 JSON 资源，见 [loadCommandPresets]）
+/// 单条快捷指令（预设组内的一项）
 class CommandPreset {
   final String label;
   final String command;
@@ -15,56 +15,43 @@ class CommandPreset {
         json['command'] as String? ?? '',
         hint: json['hint'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'command': command,
+        if (hint != null && hint!.isNotEmpty) 'hint': hint,
+      };
 }
 
-/// 快捷指令：内置预设、用户自定义、或覆盖内置的修改版
-class QuickCommand {
-  /// 数据库 id；内置预设为 null
-  final int? id;
+/// 快捷指令预设组：多个相关指令为一组（类似主题模板的分组样式）
+class CommandPresetGroup {
+  final String name;
+  final String? description;
+  final List<CommandPreset> commands;
 
-  final String label;
-  final String command;
-  final String? hint;
-
-  /// 覆盖的内置预设索引；纯自定义为 null
-  final int? overrideIndex;
-
-  /// 内置预设索引；仅内置预设有效
-  final int? builtinIndex;
-
-  /// 是否为内置预设（未被覆盖）
-  final bool isBuiltin;
-
-  /// 是否为已覆盖的内置预设（有数据库 id 且 overrideIndex 非负）
-  bool get isOverride => id != null && overrideIndex != null && overrideIndex! >= 0;
-
-  const QuickCommand({
-    this.id,
-    required this.label,
-    required this.command,
-    this.hint,
-    this.overrideIndex,
-    this.builtinIndex,
-    this.isBuiltin = false,
+  const CommandPresetGroup({
+    required this.name,
+    this.description,
+    this.commands = const [],
   });
 
-  /// 由内置预设构造
-  factory QuickCommand.builtin(CommandPreset p, int index) => QuickCommand(
-        label: p.label,
-        command: p.command,
-        hint: p.hint,
-        builtinIndex: index,
-        isBuiltin: true,
+  factory CommandPresetGroup.fromJson(Map<String, dynamic> json) =>
+      CommandPresetGroup(
+        name: (json['name'] as String?) ?? '',
+        description: json['description'] as String?,
+        commands: [
+          for (final item in (json['commands'] as List? ?? []))
+            if (item is Map)
+              CommandPreset.fromJson(item.cast<String, dynamic>()),
+        ],
       );
 
-  /// 由数据库行构造
-  factory QuickCommand.fromDb(Map<String, dynamic> row) => QuickCommand(
-        id: row['id'] as int,
-        label: row['label'] as String,
-        command: row['command'] as String,
-        hint: row['hint'] as String?,
-        overrideIndex: row['override_index'] as int?,
-      );
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (description != null && description!.isNotEmpty)
+          'description': description,
+        'commands': [for (final c in commands) c.toJson()],
+      };
 }
 
 /// 完整版指令模板（本地可选，未随公开仓库发布）
@@ -73,18 +60,55 @@ const String kPresetsAssetFull = 'assets/presets/quick_commands.full.json';
 /// 公开版示范模板（随仓库发布）
 const String kPresetsAssetPublic = 'assets/presets/quick_commands.json';
 
-/// 加载指令预设：优先尝试完整版资源，缺失时回退公开版示范模板。
+/// 完整版 MQTT 快捷指令（协议白名单子集）
+const String kMqttPresetsAssetFull = 'assets/presets/mqtt_commands.full.json';
+
+/// 公开版 MQTT 快捷指令示例
+const String kMqttPresetsAssetPublic = 'assets/presets/mqtt_commands.json';
+
+/// 解析预设 JSON：新版为分组数组 `[{name, description, commands:[...]}]`；
+/// 兼容旧版扁平数组 `[{label, command, hint}]`，会包装成单个「预设指令」组。
+List<CommandPresetGroup> _parsePresetGroups(String raw) {
+  final list = jsonDecode(raw) as List;
+  if (list.any((e) => e is Map && e.containsKey('commands'))) {
+    return [
+      for (final item in list)
+        if (item is Map)
+          CommandPresetGroup.fromJson(item.cast<String, dynamic>()),
+    ];
+  }
+  final commands = [
+    for (final item in list)
+      if (item is Map)
+        CommandPreset.fromJson(item.cast<String, dynamic>()),
+  ];
+  if (commands.isEmpty) return const [];
+  return [
+    CommandPresetGroup(name: '预设指令', commands: commands),
+  ];
+}
+
+/// 加载指令预设组。
+///
+/// 模板来源唯一：**内嵌 assets**（随程序安装包发布）。完整版资源优先，
+/// 公开示例仅作缺失回退；不做任何程序目录外部文件的读取或物化。
 /// 指令中的 `$(变量名)` 占位符（如 $(wifi_ssid)）在发送时由「模板变量」替换。
-Future<List<CommandPreset>> loadCommandPresets() async {
-  for (final asset in [kPresetsAssetFull, kPresetsAssetPublic]) {
+Future<List<CommandPresetGroup>> loadCommandPresetGroups() =>
+    _loadCommandPresetGroups(kPresetsAssetFull, kPresetsAssetPublic);
+
+/// 加载 MQTT 快捷指令组（协议 MQTT 白名单子集，指令数比 TCP 少）。
+/// 同样只从内嵌 assets 读取：完整版优先、公开示例回退。
+Future<List<CommandPresetGroup>> loadMqttCommandPresetGroups() =>
+    _loadCommandPresetGroups(kMqttPresetsAssetFull, kMqttPresetsAssetPublic);
+
+Future<List<CommandPresetGroup>> _loadCommandPresetGroups(
+  String fullAsset,
+  String publicAsset,
+) async {
+  for (final asset in [fullAsset, publicAsset]) {
     try {
       final raw = await rootBundle.loadString(asset);
-      final list = jsonDecode(raw) as List;
-      return [
-        for (final item in list)
-          if (item is Map)
-            CommandPreset.fromJson(item.cast<String, dynamic>()),
-      ];
+      return _parsePresetGroups(raw);
     } catch (_) {
       // 尝试下一个资源
     }

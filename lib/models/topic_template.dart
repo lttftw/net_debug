@@ -77,20 +77,27 @@ const String kTopicTemplatesAssetFull =
 /// 公开版示例主题模板资源（随仓库发布）
 const String kTopicTemplatesAssetPublic = 'assets/presets/topic_templates.json';
 
-/// 加载主题模板组：优先完整版资源，缺失时回退公开版示例。
+/// 加载主题模板组。
+///
+/// 模板来源唯一：**内嵌 assets**（随程序安装包发布）。完整版资源优先，
+/// 公开示例仅作缺失回退；不做任何程序目录外部文件的读取或物化。
 Future<List<TopicTemplateGroup>> loadTopicTemplateGroups() async {
   for (final asset in [kTopicTemplatesAssetFull, kTopicTemplatesAssetPublic]) {
     try {
       final raw = await rootBundle.loadString(asset);
-      final list = jsonDecode(raw) as List;
-      return [
-        for (final item in list)
-          if (item is Map)
-            TopicTemplateGroup.fromJson(item.cast<String, dynamic>()),
-      ];
+      return _parseGroups(raw);
     } catch (_) {
       // 尝试下一个资源
     }
   }
   return const [];
+}
+
+List<TopicTemplateGroup> _parseGroups(String raw) {
+  final list = jsonDecode(raw) as List;
+  return [
+    for (final item in list)
+      if (item is Map)
+        TopicTemplateGroup.fromJson(item.cast<String, dynamic>()),
+  ];
 }

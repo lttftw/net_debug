@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 
 import '../models/command_preset.dart';
-import '../services/tcp_service.dart';
+import '../services/quick_command_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/restore_confirm.dart';
 import '../widgets/variable_text_field.dart';
 
-/// 二级页：快捷指令管理（TCP 工具）
+/// 二级页：快捷指令分组管理（TCP 工具）。
+/// 指令按「组」组织，可新建/重命名/删除组、调整组顺序；
+/// 组内指令可增删改并拖拽排序，运行时配置存 sqlite。
 class QuickCommandsScreen extends StatefulWidget {
-  final TcpService service;
+  final QuickCommandService service;
   final VariablesService variables;
+  final String title;
 
   const QuickCommandsScreen({
     super.key,
     required this.service,
     required this.variables,
+    this.title = '快捷指令',
   });
 
   @override
@@ -22,141 +27,191 @@ class QuickCommandsScreen extends StatefulWidget {
 }
 
 class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
-  TcpService get _service => widget.service;
-
-  /// 本地显示顺序：由 onReorder 直接修改并 setState，
-  /// 不依赖 service 通知时序，保证拖拽落位立即生效。
-  List<QuickCommand> _items = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _items = _service.quickCommands.toList();
-    _service.addListener(_onServiceChanged);
-  }
-
-  @override
-  void dispose() {
-    _service.removeListener(_onServiceChanged);
-    super.dispose();
-  }
-
-  /// 服务变化（增删改、恢复默认、拖拽后的持久化等）时同步本地列表
-  void _onServiceChanged() {
-    if (!mounted) return;
-    setState(() => _items = _service.quickCommands.toList());
-  }
+  QuickCommandService get _service => widget.service;
 
   @override
   Widget build(BuildContext context) {
-    final items = _items;
     return Scaffold(
-      appBar: AppBar(title: const Text('快捷指令')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-            child: Row(
-              children: [
-                Text(
-                  '${items.length} 条指令',
-                  style: Theme.of(context).textTheme.titleSmall,
+      appBar: AppBar(title: Text(widget.title)),
+      body: ListenableBuilder(
+        listenable: _service,
+        builder: (context, _) {
+          final groups = _service.groups;
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                child: Row(
+                  children: [
+                    Text(
+                      '${groups.length} 组 · ${_service.totalCount} 条指令',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: _showAddGroupDialog,
+                      icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                      label: const Text('新建组'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        if (!mounted) return;
+                        if (await confirmRestoreDefaults(context, '快捷指令')) {
+                          await _service.restoreDefaults();
+                        }
+                      },
+                      icon: const Icon(Icons.restore, size: 18),
+                      label: const Text('恢复默认'),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _showAddQuickCommand,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('添加'),
-                ),
-                if (_service.hasHiddenBuiltins)
-                  TextButton.icon(
-                    onPressed: _service.restoreAllBuiltins,
-                    icon: const Icon(Icons.restore, size: 18),
-                    label: const Text('恢复全部'),
+              ),
+              if (groups.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text('暂无分组，点击右上角「新建组」开始', style: TextStyle(color: Colors.grey)),
                   ),
-              ],
+                ),
+              for (var gi = 0; gi < groups.length; gi++)
+                _buildGroupCard(gi, groups[gi], groups.length),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '组内指令可拖拽右侧把手排序；拖拽分组卡片可调整组顺序（应用内操作实时保存）',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------- 组卡片 ----------
+
+  Widget _buildGroupCard(int gi, CommandPresetGroup g, int groupCount) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        leading: Icon(Icons.folder_outlined, color: theme.colorScheme.primary),
+        title: Text(g.name, style: const TextStyle(fontSize: 15)),
+        subtitle: (g.description == null || g.description!.isEmpty)
+            ? null
+            : Text(
+                g.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: '组上移',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.arrow_upward, size: 16),
+              onPressed: gi == 0 ? null : () => _service.moveGroup(gi, gi - 1),
             ),
+            IconButton(
+              tooltip: '组下移',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.arrow_downward, size: 16),
+              onPressed: gi == groupCount - 1
+                  ? null
+                  : () => _service.moveGroup(gi, gi + 1),
+            ),
+            const Icon(Icons.expand_more),
+          ],
+        ),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        children: [
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          Row(
+            children: [
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => _showCommandEditor(groupIndex: gi),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('添加指令', style: TextStyle(fontSize: 12)),
+              ),
+              IconButton(
+                tooltip: '编辑组',
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                onPressed: () => _showGroupEditor(index: gi, group: g),
+              ),
+              IconButton(
+                tooltip: '删除组',
+                icon: const Icon(Icons.delete_outline, size: 18),
+                onPressed: () => _service.removeGroup(gi),
+              ),
+            ],
           ),
-          Expanded(
-            child: ReorderableListView(
+          if (g.commands.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  '本组暂无指令',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            ReorderableListView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
               onReorderItem: (oldIndex, newIndex) {
                 if (oldIndex == newIndex) return;
-                // 1) 本地立即重排并重建，落位必定生效
-                setState(() {
-                  final moved = _items.removeAt(oldIndex);
-                  _items.insert(newIndex, moved);
-                });
-                // 2) 同步 service 内存（TCP 页快捷栏联动）并异步持久化
-                _service.moveQuickCommand(oldIndex, newIndex);
+                _service.moveCommand(gi, oldIndex, newIndex);
               },
               children: [
-                for (var i = 0; i < items.length; i++)
-                  _buildCommandTile(items[i], i),
+                for (var ci = 0; ci < g.commands.length; ci++)
+                  _buildCommandTile(gi, ci, g.commands[ci]),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '拖拽右侧把手可调整显示顺序\n'
-              '点击指令自动替换变量后填入输入框，支持 \$(变量)',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  /// 列表项稳定 key（内置/覆盖按内置索引，自定义按 id）
-  String _keyFor(QuickCommand qc) {
-    if (qc.isBuiltin || qc.isOverride) {
-      return 'b${qc.builtinIndex ?? qc.overrideIndex}';
-    }
-    return 'c${qc.id}';
-  }
-
-  Widget _buildCommandTile(QuickCommand qc, int index) {
+  Widget _buildCommandTile(int gi, int ci, CommandPreset c) {
     return ListTile(
-      key: ValueKey(_keyFor(qc)),
+      key: ValueKey('$gi-$ci-${c.label}'),
       dense: true,
-      leading: Icon(
-        qc.isBuiltin || qc.isOverride
-            ? Icons.bookmark_outline
-            : Icons.add_box_outlined,
-        size: 18,
+      contentPadding: const EdgeInsets.only(left: 16, right: 8),
+      leading: const Icon(Icons.code, size: 16),
+      title: Text(
+        c.label,
+        style: const TextStyle(fontSize: 13),
+        overflow: TextOverflow.ellipsis,
       ),
-      title: Text(qc.label, style: const TextStyle(fontSize: 14)),
       subtitle: Text(
-        qc.command,
+        c.command,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 11,
-          color: Colors.grey,
-        ),
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Colors.grey),
       ),
-      onTap: () => _showQuickCommandEditor(existing: qc),
+      onTap: () => _showCommandEditor(groupIndex: gi, commandIndex: ci, existing: c),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           PopupMenuButton<String>(
             tooltip: '操作',
-            onSelected: (action) => _handleCommandAction(qc, action),
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'edit', child: Text('编辑')),
-              if (qc.isBuiltin && qc.isOverride)
-                const PopupMenuItem(value: 'restore', child: Text('恢复默认')),
-              PopupMenuItem(
-                value: 'delete',
-                child: Text(qc.isBuiltin ? '隐藏' : '删除'),
-              ),
+            onSelected: (action) => _handleCommandAction(gi, ci, action),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'edit', child: Text('编辑')),
+              PopupMenuItem(value: 'delete', child: Text('删除')),
             ],
           ),
           ReorderableDragStartListener(
-            index: index,
+            index: ci,
             child: const Padding(
               padding: EdgeInsets.only(left: 4),
               child: Icon(Icons.drag_indicator, size: 20),
@@ -167,43 +222,87 @@ class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
     );
   }
 
-  void _handleCommandAction(QuickCommand qc, String action) {
+  void _handleCommandAction(int gi, int ci, String action) {
     switch (action) {
       case 'edit':
-        _showQuickCommandEditor(existing: qc);
-      case 'restore':
-        _service.restoreBuiltin(qc.builtinIndex!);
+        _showCommandEditor(
+          groupIndex: gi,
+          commandIndex: ci,
+          existing: _service.groups[gi].commands[ci],
+        );
       case 'delete':
-        if (qc.isBuiltin) {
-          _service.hideBuiltin(qc.builtinIndex!);
-        } else {
-          _service.deleteQuickCommand(qc.id!);
-        }
+        _service.removeCommand(gi, ci);
     }
   }
 
-  Future<void> _showAddQuickCommand() => _showQuickCommandEditor();
+  // ---------- 对话框 ----------
 
-  Future<void> _showQuickCommandEditor({QuickCommand? existing}) async {
-    final labelCtrl = TextEditingController(text: existing?.label ?? '');
-    final cmdCtrl = TextEditingController(text: existing?.command ?? '');
-    final hintCtrl = TextEditingController(text: existing?.hint ?? '');
-    final isBuiltin = existing?.isBuiltin ?? false;
+  Future<void> _showAddGroupDialog() => _showGroupEditor();
 
+  Future<void> _showGroupEditor({int? index, CommandPresetGroup? group}) async {
+    final nameCtrl = TextEditingController(text: group?.name ?? '');
+    final descCtrl = TextEditingController(text: group?.description ?? '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? '添加快捷指令' : '编辑快捷指令'),
+        title: Text(group == null ? '新建分组' : '编辑分组'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '组名', isDense: true),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: descCtrl,
+              decoration: const InputDecoration(
+                labelText: '描述（可选）',
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('保存')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) {
+      showAppToast(context, '组名不能为空');
+      return;
+    }
+    if (group == null) {
+      await _service.addGroup(name, description: descCtrl.text.trim());
+    } else {
+      await _service.updateGroup(index!, name: name, description: descCtrl.text);
+    }
+  }
+
+  Future<void> _showCommandEditor({
+    required int groupIndex,
+    int? commandIndex,
+    CommandPreset? existing,
+  }) async {
+    final labelCtrl = TextEditingController(text: existing?.label ?? '');
+    final cmdCtrl = TextEditingController(text: existing?.command ?? '');
+    final hintCtrl = TextEditingController(text: existing?.hint ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(existing == null ? '添加指令' : '编辑指令'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: labelCtrl,
-                decoration: const InputDecoration(
-                  labelText: '名称',
-                  isDense: true,
-                ),
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '名称', isDense: true),
               ),
               const SizedBox(height: 8),
               VariableAwareTextField(
@@ -226,20 +325,12 @@ class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('保存'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('保存')),
         ],
       ),
     );
-    if (ok != true) return;
-    if (!mounted) return;
-
+    if (ok != true || !mounted) return;
     final label = labelCtrl.text.trim();
     final command = cmdCtrl.text.trim();
     final hint = hintCtrl.text.trim();
@@ -249,19 +340,18 @@ class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
     }
     final hintOrNull = hint.isEmpty ? null : hint;
     if (existing == null) {
-      await _service.addQuickCommand(label, command, hint: hintOrNull);
-    } else if (isBuiltin) {
-      await _service.overrideBuiltin(
-        existing.builtinIndex!,
-        label,
-        command,
+      await _service.addCommand(
+        groupIndex,
+        label: label,
+        command: command,
         hint: hintOrNull,
       );
     } else {
-      await _service.updateQuickCommand(
-        existing.id!,
-        label,
-        command,
+      await _service.updateCommand(
+        groupIndex,
+        commandIndex!,
+        label: label,
+        command: command,
         hint: hintOrNull,
       );
     }

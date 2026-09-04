@@ -1,11 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../models/message_display_style.dart';
+import 'app_state_db.dart';
 
 /// 全局主题配色统一管理。
 /// 深色/浅色模式各自维护一套主色与收发记录色，切换亮度自动使用对应配置；
@@ -131,10 +129,14 @@ class ThemeService extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'theme_config.json'));
-      if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString());
+      // 迁移旧版 JSON 后从统一 sqlite 读取运行时外观配置
+      await AppStateDb.instance.migrateFileToKey(
+        AppStateDb.themeKey,
+        'theme_config.json',
+      );
+      final raw = await AppStateDb.instance.read(AppStateDb.themeKey);
+      if (raw != null) {
+        final json = jsonDecode(raw);
         final map = (json as Map).cast<String, dynamic>();
         // 兼容旧格式（seed/tx/rx 作为深色配置）
         final legacySeed = map['seed'] as int?;
@@ -244,22 +246,19 @@ class ThemeService extends ChangeNotifier {
   }
 
   Future<void> _save() async {
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'theme_config.json'));
-      await file.writeAsString(
-        jsonEncode({
-          'darkSeed': _darkSeed.toARGB32(),
-          'darkTx': _darkTx.toARGB32(),
-          'darkRx': _darkRx.toARGB32(),
-          'lightSeed': _lightSeed.toARGB32(),
-          'lightTx': _lightTx.toARGB32(),
-          'lightRx': _lightRx.toARGB32(),
-          'dark': _dark,
-          'logFontSize': _logFontSize,
-          'messageDisplayStyle': _messageDisplayStyle.name,
-        }),
-      );
-    } catch (_) {}
+    await AppStateDb.instance.write(
+      AppStateDb.themeKey,
+      jsonEncode({
+        'darkSeed': _darkSeed.toARGB32(),
+        'darkTx': _darkTx.toARGB32(),
+        'darkRx': _darkRx.toARGB32(),
+        'lightSeed': _lightSeed.toARGB32(),
+        'lightTx': _lightTx.toARGB32(),
+        'lightRx': _lightRx.toARGB32(),
+        'dark': _dark,
+        'logFontSize': _logFontSize,
+        'messageDisplayStyle': _messageDisplayStyle.name,
+      }),
+    );
   }
 }

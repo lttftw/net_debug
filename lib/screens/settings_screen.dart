@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/global_log_service.dart';
+import '../services/quick_command_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
@@ -22,6 +23,8 @@ class SettingsScreen extends StatefulWidget {
   final ThemeService theme;
   final GlobalLogService globalLog;
   final TopicTemplateService topics;
+  final QuickCommandService quickCommands;
+  final QuickCommandService mqttQuickCommands;
 
   const SettingsScreen({
     super.key,
@@ -30,6 +33,8 @@ class SettingsScreen extends StatefulWidget {
     required this.theme,
     required this.globalLog,
     required this.topics,
+    required this.quickCommands,
+    required this.mqttQuickCommands,
   });
 
   @override
@@ -45,6 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ThemeService get _theme => widget.theme;
   GlobalLogService get _globalLog => widget.globalLog;
   TopicTemplateService get _topics => widget.topics;
+  QuickCommandService get _qcs => widget.quickCommands;
+  QuickCommandService get _mqttQcs => widget.mqttQuickCommands;
 
   /// 全部主题模板总数
   int get _totalTemplateCount =>
@@ -55,7 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('应用设置')),
       body: ListenableBuilder(
-        listenable: Listenable.merge([_service, _vars, _theme, _topics]),
+        listenable: Listenable.merge(
+            [_service, _vars, _theme, _topics, _qcs, _mqttQcs]),
         builder: (context, _) {
           return Center(
             child: ConstrainedBox(
@@ -63,27 +71,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final sections = _buildSections();
+                  final useTwoColumns = constraints.maxWidth >= 820;
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                    children: constraints.maxWidth >= 820
-                        ? [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    children: [sections[0], sections[2]],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    children: [sections[1], sections[3]],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ]
+                    children: useTwoColumns
+                        ? [_buildTwoColumns(sections)]
                         : sections,
                   );
                 },
@@ -101,9 +93,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _entryTile(
           icon: Icons.bookmarks_outlined,
           title: '快捷指令',
-          subtitle: '${_service.quickCommands.length} 条可用指令',
+          subtitle:
+              '${_qcs.groups.length} 组 · ${_qcs.totalCount} 条可用指令',
           onTap: () =>
-              _open(QuickCommandsScreen(service: _service, variables: _vars)),
+              _open(QuickCommandsScreen(service: _qcs, variables: _vars)),
         ),
         _entryTile(
           icon: Icons.history,
@@ -141,6 +134,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+        ),
+      ]),
+      _sectionBlock('MQTT 工具', [
+        _entryTile(
+          icon: Icons.hub_outlined,
+          title: '快捷指令',
+          subtitle:
+              '${_mqttQcs.groups.length} 组 · ${_mqttQcs.totalCount} 条可用指令',
+          onTap: () => _open(QuickCommandsScreen(
+              service: _mqttQcs, variables: _vars, title: 'MQTT 快捷指令')),
         ),
       ]),
       _sectionBlock('通用', [
@@ -193,6 +196,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ]),
     ];
+  }
+
+  /// 宽屏时将区块交错分配到左右两列，区块数量不限。
+  Widget _buildTwoColumns(List<Widget> sections) {
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var i = 0; i < sections.length; i++) {
+      (i.isEven ? left : right).add(sections[i]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: Column(children: left)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(children: right)),
+      ],
+    );
   }
 
   Widget _sectionBlock(String title, List<Widget> children) {

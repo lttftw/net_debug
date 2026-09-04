@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../models/command_preset.dart';
+import 'app_state_db.dart';
 import 'global_log_service.dart';
 
 /// TCP 连接状态
@@ -80,9 +80,6 @@ class TcpService extends ChangeNotifier {
   final List<LogEntry> _logs = [];
   final List<HistoryEntry> _history = [];
   final List<ConnectionProfile> _connections = [];
-  final List<QuickCommand> _quickCommands = [];
-  final List<CommandPreset> _presets = [];
-  bool _presetsLoaded = false;
 
   /// 是否启用 OTA 固件升级扩展（设备特定协议，默认关闭）
   bool _otaEnabled = false;
@@ -119,22 +116,9 @@ class TcpService extends ChangeNotifier {
   List<LogEntry> get logs => List.unmodifiable(_logs);
   List<HistoryEntry> get history => List.unmodifiable(_history);
   List<ConnectionProfile> get connections => List.unmodifiable(_connections);
-  List<QuickCommand> get quickCommands => List.unmodifiable(_quickCommands);
-
-  /// 内置指令预设（来自 JSON 资源）
-  List<CommandPreset> get presets => List.unmodifiable(_presets);
-
   /// 是否启用 OTA 固件升级扩展
   bool get otaEnabled => _otaEnabled;
 
-  /// 是否有被隐藏的内置预设（用于显示"恢复全部"入口）
-  bool get hasHiddenBuiltins {
-    // 内置预设总数 - 当前显示的内置预设数 > 0 表示有隐藏
-    int builtinShown = _quickCommands
-        .where((q) => q.isBuiltin || q.isOverride)
-        .length;
-    return builtinShown < _presets.length;
-  }
 
   bool get autoScroll => _autoScroll;
   bool get busy => _pending != null;
@@ -245,13 +229,16 @@ class TcpService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 加载工具配置（如 OTA 扩展开关）
+  /// 加载工具配置（如 OTA 扩展开关）。运行时设置统一存 sqlite。
   Future<void> loadSettings() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'tcp_settings.json'));
-      if (await file.exists()) {
-        final json = jsonDecode(await file.readAsString());
+      await AppStateDb.instance.migrateFileToKey(
+        AppStateDb.tcpSettingsKey,
+        'tcp_settings.json',
+      );
+      final raw = await AppStateDb.instance.read(AppStateDb.tcpSettingsKey);
+      if (raw != null) {
+        final json = jsonDecode(raw);
         _otaEnabled = (json['ota_enabled'] as bool?) ?? false;
       }
     } catch (_) {
@@ -260,17 +247,14 @@ class TcpService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 设置 OTA 固件升级扩展开关（持久化）
+  /// 设置 OTA 固件升级扩展开关（持久化到 sqlite）
   Future<void> setOtaEnabled(bool value) async {
     _otaEnabled = value;
     notifyListeners();
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, 'tcp_settings.json'));
-      await file.writeAsString(jsonEncode({'ota_enabled': _otaEnabled}));
-    } catch (_) {
-      // 忽略存储错误
-    }
+    await AppStateDb.instance.write(
+      AppStateDb.tcpSettingsKey,
+      jsonEncode({'ota_enabled': _otaEnabled}),
+    );
   }
 
   /// 连接设备
@@ -749,345 +733,6 @@ class TcpService extends ChangeNotifier {
           [_kMaxConnections],
         );
       });
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 从内置 JSON 资源加载指令预设（幂等）。
-  Future<void> _loadCommandPresets() async {
-    if (_presetsLoaded) return;
-    _presetsLoaded = true;
-    _presets
-      ..clear()
-      ..addAll(await loadCommandPresets());
-  }
-
-  /// 从 sqlite 加载快捷指令（内置预设 + 自定义/覆盖项）
-  /// 加载快捷指令（按用户自定义排序：排序表优先，缺失项自动补到末尾）
-  Future<void> loadQuickCommands() async {
-    await _loadCommandPresets();
-    try {
-      await _initDb();
-      final db = _db!;
-      final rows = await db.query('quick_commands', orderBy: 'id ASC');
-      await _syncQuickOrder(rows);
-      final orderRows = await db.query(
-        'quick_command_order',
-        orderBy: 'sort_order ASC',
-      );
-      _rebuildQuickCommands(rows, orderRows);
-    } catch (_) {
-      // 忽略存储错误
-    }
-    notifyListeners();
-  }
-
-  /// 确保排序表存在且完整：
-  /// - 首次使用时写入默认顺序（内置按预设索引 + 自定义按 id）；
-  /// - 之后将新增的内置预设/自定义指令补充到末尾，保证不丢失。
-  Future<void> _syncQuickOrder(List<Map<String, dynamic>>? qcRows) async {
-    final db = _db;
-    if (db == null) return;
-    final rows = qcRows ?? await db.query('quick_commands');
-    final customIds = <int>[];
-    for (final row in rows) {
-      final qc = QuickCommand.fromDb(row);
-      if (qc.overrideIndex == null) customIds.add(qc.id!);
-    }
-    final orderRows = await db.query('quick_command_order');
-    final existingBuiltin = <int>{};
-    final existingCustom = <int>{};
-    var maxOrder = 0;
-    for (final row in orderRows) {
-      final o = row['sort_order'] as int;
-      if (o > maxOrder) maxOrder = o;
-      if ((row['is_builtin'] as int) == 1) {
-        existingBuiltin.add(row['builtin_index'] as int);
-      } else {
-        existingCustom.add(row['ref_id'] as int);
-      }
-    }
-    final batch = db.batch();
-    var added = false;
-    for (var i = 0; i < _presets.length; i++) {
-      if (existingBuiltin.contains(i)) continue;
-      batch.insert('quick_command_order', {
-        'sort_order': ++maxOrder,
-        'is_builtin': 1,
-        'builtin_index': i,
-      });
-      added = true;
-    }
-    for (final id in customIds) {
-      if (existingCustom.contains(id)) continue;
-      batch.insert('quick_command_order', {
-        'sort_order': ++maxOrder,
-        'is_builtin': 0,
-        'ref_id': id,
-      });
-      added = true;
-    }
-    if (added) await batch.commit(noResult: true);
-  }
-
-  void _rebuildQuickCommands(
-    List<Map<String, dynamic>> rows,
-    List<Map<String, dynamic>> orderRows,
-  ) {
-    final overrides = <int, QuickCommand>{};
-    final customs = <int, QuickCommand>{};
-    final hidden = <int>{};
-    for (final row in rows) {
-      final qc = QuickCommand.fromDb(row);
-      final idx = qc.overrideIndex;
-      if (idx != null) {
-        if (idx < 0) {
-          // 负数表示隐藏的内置预设（-1 -> 隐藏内置 0, -2 -> 隐藏内置 1 ...）
-          hidden.add(-idx - 1);
-        } else {
-          overrides[idx] = qc;
-        }
-      } else {
-        customs[qc.id!] = qc;
-      }
-    }
-    _quickCommands.clear();
-    if (orderRows.isNotEmpty) {
-      for (final row in orderRows) {
-        if ((row['is_builtin'] as int) == 1) {
-          final i = row['builtin_index'] as int;
-          if (i < 0 || i >= _presets.length) continue;
-          if (hidden.contains(i)) continue; // 用户隐藏的内置预设跳过
-          _quickCommands.add(
-            overrides[i] ?? QuickCommand.builtin(_presets[i], i),
-          );
-        } else {
-          final qc = customs[row['ref_id'] as int];
-          if (qc != null) _quickCommands.add(qc);
-        }
-      }
-    } else {
-      // 无排序表：按默认顺序（内置 + 自定义）
-      for (var i = 0; i < _presets.length; i++) {
-        if (hidden.contains(i)) continue;
-        _quickCommands.add(
-          overrides[i] ?? QuickCommand.builtin(_presets[i], i),
-        );
-      }
-      _quickCommands.addAll(customs.values);
-    }
-  }
-
-  /// 调整快捷指令显示顺序：同步更新内存并通知（各页面联动），
-  /// 再异步按内存显示顺序重建排序表持久化。
-  Future<void> moveQuickCommand(int from, int to) async {
-    if (from == to) return;
-    if (from < 0 ||
-        from >= _quickCommands.length ||
-        to < 0 ||
-        to >= _quickCommands.length) {
-      return;
-    }
-    // 1) 同步移动内存列表并通知
-    final moved = _quickCommands.removeAt(from);
-    _quickCommands.insert(to, moved);
-    notifyListeners();
-    // 2) 异步持久化：按当前内存显示顺序整表重建，
-    //    规避排序表含隐藏项时按索引移位会错位的问题
-    final db = _db;
-    if (db == null) return;
-    try {
-      await _persistQuickCommandOrder();
-    } catch (_) {
-      await loadQuickCommands(); // 持久化失败时回滚为已保存顺序
-    }
-  }
-
-  /// 按内存显示列表整表重建排序表（与界面完全一致；
-  /// 被隐藏的内置项追加到末尾，恢复后出现在最后）
-  Future<void> _persistQuickCommandOrder() async {
-    final db = _db;
-    if (db == null) return;
-    final displayedBuiltins = <int>{};
-    final batch = db.batch();
-    batch.delete('quick_command_order');
-    var order = 0;
-    for (final qc in _quickCommands) {
-      if (qc.isBuiltin || qc.isOverride) {
-        final idx = qc.builtinIndex ?? qc.overrideIndex!;
-        displayedBuiltins.add(idx);
-        batch.insert('quick_command_order', {
-          'sort_order': ++order,
-          'is_builtin': 1,
-          'builtin_index': idx,
-        });
-      } else {
-        batch.insert('quick_command_order', {
-          'sort_order': ++order,
-          'is_builtin': 0,
-          'ref_id': qc.id,
-        });
-      }
-    }
-    for (var i = 0; i < _presets.length; i++) {
-      if (displayedBuiltins.contains(i)) continue;
-      batch.insert('quick_command_order', {
-        'sort_order': ++order,
-        'is_builtin': 1,
-        'builtin_index': i,
-      });
-    }
-    await batch.commit(noResult: true);
-  }
-
-  /// 新增自定义快捷指令（追加到列表末尾）
-  Future<void> addQuickCommand(
-    String label,
-    String command, {
-    String? hint,
-  }) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      final id = await db.insert('quick_commands', {
-        'label': label,
-        'command': command,
-        'hint': hint,
-      });
-      final maxOrder =
-          Sqflite.firstIntValue(
-            await db.rawQuery(
-              'SELECT COALESCE(MAX(sort_order), 0) FROM quick_command_order',
-            ),
-          ) ??
-          0;
-      await db.insert('quick_command_order', {
-        'sort_order': maxOrder + 1,
-        'is_builtin': 0,
-        'ref_id': id,
-      });
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 更新自定义/覆盖快捷指令
-  Future<void> updateQuickCommand(
-    int id,
-    String label,
-    String command, {
-    String? hint,
-  }) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      await db.update(
-        'quick_commands',
-        {'label': label, 'command': command, 'hint': hint},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 删除自定义快捷指令（同步清理排序表记录）
-  Future<void> deleteQuickCommand(int id) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      await db.delete('quick_commands', where: 'id = ?', whereArgs: [id]);
-      await db.delete(
-        'quick_command_order',
-        where: 'is_builtin = 0 AND ref_id = ?',
-        whereArgs: [id],
-      );
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 修改内置预设：保存为覆盖项（原内置仍可恢复）
-  Future<void> overrideBuiltin(
-    int index,
-    String label,
-    String command, {
-    String? hint,
-  }) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      final existing = await db.query(
-        'quick_commands',
-        where: 'override_index = ?',
-        whereArgs: [index],
-      );
-      if (existing.isNotEmpty) {
-        await db.update(
-          'quick_commands',
-          {'label': label, 'command': command, 'hint': hint},
-          where: 'override_index = ?',
-          whereArgs: [index],
-        );
-      } else {
-        await db.insert('quick_commands', {
-          'label': label,
-          'command': command,
-          'hint': hint,
-          'override_index': index,
-        });
-      }
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 恢复内置预设默认（删除覆盖项）
-  Future<void> restoreBuiltin(int index) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      await db.delete(
-        'quick_commands',
-        where: 'override_index = ?',
-        whereArgs: [index],
-      );
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 隐藏内置预设（长按删除）
-  Future<void> hideBuiltin(int index) async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      // 负数 override_index 表示隐藏：-1 -> 内置 0, -2 -> 内置 1 ...
-      await db.insert('quick_commands', {
-        'label': '',
-        'command': '',
-        'override_index': -(index + 1),
-      });
-      await loadQuickCommands();
-    } catch (_) {
-      // 忽略存储错误
-    }
-  }
-
-  /// 恢复全部隐藏的内置预设
-  Future<void> restoreAllBuiltins() async {
-    final db = _db;
-    if (db == null) return;
-    try {
-      await db.delete('quick_commands', where: 'override_index < 0');
-      await loadQuickCommands();
     } catch (_) {
       // 忽略存储错误
     }

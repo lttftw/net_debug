@@ -1,0 +1,166 @@
+[
+  {
+    "name": "状态与信息",
+    "description": "MQTT 白名单允许的 get（可读全部配置键；密码仅返回是否已设置）",
+    "commands": [
+      {
+        "label": "综合状态",
+        "command": "{\"get\":\"status\"}"
+      },
+      {
+        "label": "获取全部配置",
+        "command": "{\"get\":\"config\"}"
+      },
+      {
+        "label": "读取任意配置",
+        "command": "{\"get\":\"mqtt_host\"}",
+        "hint": "把 mqtt_host 换成任意可读键：wifi_ssid/wifi_pass/mqtt_user/mqtt_pass/mqtt_device/mqtt_product/mqtt_service/mqtt_up_topic/mqtt_svc_topic/mqtt_prop_map/mqtt_uptime_min/mqtt_uptime_up/linkage/log/scan/ota/last_submit"
+      },
+      {
+        "label": "读属性映射",
+        "command": "{\"get\":\"mqtt_prop_map\"}"
+      }
+    ]
+  },
+  {
+    "name": "计数器",
+    "description": "计数操作在 MQTT 白名单内（0–4294967295 饱和不回绕）",
+    "commands": [
+      {
+        "label": "计数 CH0 +1",
+        "command": "{\"counter\":{\"channel\":0,\"op\":\"inc\"}}"
+      },
+      {
+        "label": "计数 CH1 +1",
+        "command": "{\"counter\":{\"channel\":1,\"op\":\"inc\"}}"
+      },
+      {
+        "label": "计数 CH2 +1",
+        "command": "{\"counter\":{\"channel\":2,\"op\":\"inc\"}}"
+      },
+      {
+        "label": "计数 CH3 +1",
+        "command": "{\"counter\":{\"channel\":3,\"op\":\"inc\"}}"
+      },
+      {
+        "label": "清零单通道",
+        "command": "{\"counter\":{\"channel\":0,\"op\":\"reset\"}}",
+        "hint": "把 channel 0 换成 0–3"
+      },
+      {
+        "label": "全部清零",
+        "command": "{\"counter\":{\"op\":\"reset_all\"}}"
+      }
+    ]
+  },
+  {
+    "name": "数字输出",
+    "description": "输出控制（value 必须是布尔）",
+    "commands": [
+      {
+        "label": "输出0 开",
+        "command": "{\"output\":{\"id\":0,\"value\":true}}"
+      },
+      {
+        "label": "输出0 关",
+        "command": "{\"output\":{\"id\":0,\"value\":false}}"
+      },
+      {
+        "label": "输出1 开",
+        "command": "{\"output\":{\"id\":1,\"value\":true}}"
+      },
+      {
+        "label": "输出1 关",
+        "command": "{\"output\":{\"id\":1,\"value\":false}}"
+      }
+    ]
+  },
+  {
+    "name": "输出联动",
+    "description": "联动规则读写（MQTT 白名单允许）",
+    "commands": [
+      {
+        "label": "联动 DO0 与条件",
+        "command": "{\"linkage\":{\"output\":0,\"expression\":\"c0>=100&&c1<20\",\"true\":true}}",
+        "hint": "支持 && || == != >= <= > < 与 c0–c3"
+      },
+      {
+        "label": "联动 DO1 等于",
+        "command": "{\"linkage\":{\"output\":1,\"expression\":\"c2==5\",\"true\":true}}"
+      },
+      {
+        "label": "清除联动",
+        "command": "{\"linkage\":{\"output\":0,\"expression\":\"\",\"true\":true}}",
+        "hint": "把 output 换成 0/1；expression 空串即清除"
+      },
+      {
+        "label": "读取联动规则",
+        "command": "{\"get\":\"linkage\"}"
+      }
+    ]
+  },
+  {
+    "name": "实时日志",
+    "description": "日志流经 MQTT 下发到 _reply Topic（QoS 0），可随时关闭",
+    "commands": [
+      {
+        "label": "开启日志流",
+        "command": "{\"log\":{\"enabled\":true}}"
+      },
+      {
+        "label": "关闭日志流",
+        "command": "{\"log\":{\"enabled\":false}}"
+      },
+      {
+        "label": "查询日志状态",
+        "command": "{\"get\":\"log\"}"
+      }
+    ]
+  },
+  {
+    "name": "可用配置",
+    "description": "MQTT 仅允许写入这些键；混合禁止键的 patch 会被整批拒绝",
+    "commands": [
+      {
+        "label": "上报映射·默认",
+        "command": "{\"set\":{\"key\":\"mqtt_prop_map\",\"value\":\"device_runtime=runtime,input_0=counter0,input_1=counter1,input_2=counter2,input_3=counter3,output_0=output0,output_1=output1,device_ip=ip\"}}",
+        "hint": "固件默认映射（8 项），最多装载 16 条"
+      },
+      {
+        "label": "上报映射·全量",
+        "command": "{\"set\":{\"key\":\"mqtt_prop_map\",\"value\":\"dev_runtime=runtime,in0=counter0,in1=counter1,in2=counter2,in3=counter3,out0=output0,out1=output1,heap=heap,minheap=minheap,rssi=rssi,linkgen=linkgen,device_ip=ip\"}}",
+        "hint": "覆盖全部数据源（12 项）：runtime=运行秒数, counter0-3=四路计数, output0-1=两路输出, heap/minheap=空闲/最小堆内存, rssi=信号强度, linkgen=链路代数, ip=IPv4 地址"
+      },
+      {
+        "label": "上报映射·精简",
+        "command": "{\"set\":{\"key\":\"mqtt_prop_map\",\"value\":\"device_runtime=runtime,input_0=counter0,output_0=output0,device_ip=ip\"}}",
+        "hint": "仅 运行时长/计数0/输出0/IP"
+      },
+      {
+        "label": "最小上报间隔",
+        "command": "{\"set\":{\"key\":\"mqtt_uptime_min\",\"value\":500}}",
+        "hint": "500–3600000 ms"
+      },
+      {
+        "label": "固定上报周期",
+        "command": "{\"set\":{\"key\":\"mqtt_uptime_up\",\"value\":30000}}",
+        "hint": "500–3600000 ms"
+      },
+      {
+        "label": "上报周期·组合",
+        "command": "{\"patch\":{\"mqtt_uptime_min\":500,\"mqtt_uptime_up\":30000}}",
+        "hint": "最小 500 ms + 固定 30 s"
+      },
+      {
+        "label": "CH0 完整输入参数示例",
+        "command": "{\"patch\":{\"counter0_gpio\":7,\"counter0_level\":0,\"counter0_db_ms\":50,\"counter0_valid_ms\":50,\"counter0_pull\":1}}",
+        "hint": "gpio=7(GPIO4–7 不重复) level=0 低/1 高 db_ms/valid_ms 立即生效，gpio/level/pull 重启生效"
+      },
+      {
+        "label": "修改输入 GPIO",
+        "command": "{\"set\":{\"key\":\"counter0_gpio\",\"value\":7}}",
+        "hint": "counter0 换成 0–3；GPIO4–7 不得重复；重启生效"
+      }
+    ]
+  }
+]
