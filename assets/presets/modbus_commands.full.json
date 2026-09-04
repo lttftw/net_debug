@@ -1,0 +1,147 @@
+[
+  {
+    "name": "读取状态",
+    "description": "FC01/02/04 读取线圈、离散输入与输入寄存器（均零基地址）",
+    "commands": [
+      {
+        "label": "读映射信息",
+        "command": "{\"fc\": 4, \"addr\": 0, \"count\": 3}",
+        "hint": "版本 0x0000 / 通道数 0x0001 / 输出数 0x0002"
+      },
+      {
+        "label": "读全部计数",
+        "command": "{\"fc\": 4, \"addr\": 16, \"count\": 8, \"as\": \"u32\"}",
+        "hint": "counter0-3 各两字，uint32 高字在前（0x0010 起）"
+      },
+      {
+        "label": "读输出位图",
+        "command": "{\"fc\": 4, \"addr\": 32, \"count\": 1}",
+        "hint": "bit0=DO0 bit1=DO1"
+      },
+      {
+        "label": "读联动位图",
+        "command": "{\"fc\": 4, \"addr\": 33, \"count\": 4}",
+        "hint": "启用/有效/表达式结果/true 电平 四位图"
+      },
+      {
+        "label": "读运行秒数",
+        "command": "{\"fc\": 4, \"addr\": 48, \"count\": 2, \"as\": \"u32\"}",
+        "hint": "设备运行秒数，uint32 高字在前（0x0030 起）"
+      },
+      {
+        "label": "读线圈 DO0/DO1",
+        "command": "{\"fc\": 1, \"addr\": 0, \"count\": 2}",
+        "hint": "bit0=DO0 bit1=DO1"
+      },
+      {
+        "label": "读离散输入",
+        "command": "{\"fc\": 2, \"addr\": 0, \"count\": 8}",
+        "hint": "DO 状态 / 联动启用 / 表达式结果 / 联动有效"
+      }
+    ]
+  },
+  {
+    "name": "输出控制",
+    "description": "FC05 写线圈 / FC06 写输出位图",
+    "commands": [
+      {
+        "label": "DO0 开",
+        "command": "{\"fc\": 5, \"addr\": 0, \"value\": true}"
+      },
+      {
+        "label": "DO0 关",
+        "command": "{\"fc\": 5, \"addr\": 0, \"value\": false}"
+      },
+      {
+        "label": "DO1 开",
+        "command": "{\"fc\": 5, \"addr\": 1, \"value\": true}"
+      },
+      {
+        "label": "DO1 关",
+        "command": "{\"fc\": 5, \"addr\": 1, \"value\": false}"
+      },
+      {
+        "label": "写输出位图",
+        "command": "{\"fc\": 6, \"addr\": 32, \"value\": 0}",
+        "hint": "值 0-3：bit0=DO0 bit1=DO1"
+      }
+    ]
+  },
+  {
+    "name": "计数控制",
+    "description": "FC06 写命令寄存器 0x0000，写入后立即执行",
+    "commands": [
+      {
+        "label": "计数 CH0 +1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 33}",
+        "hint": "命令值 0x0021"
+      },
+      {
+        "label": "计数 CH1 +1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 34}",
+        "hint": "命令值 0x0022"
+      },
+      {
+        "label": "计数 CH2 +1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 35}",
+        "hint": "命令值 0x0023"
+      },
+      {
+        "label": "计数 CH3 +1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 36}",
+        "hint": "命令值 0x0024"
+      },
+      {
+        "label": "复位 CH0",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 1}",
+        "hint": "命令值 0x0001"
+      },
+      {
+        "label": "复位 CH1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 2}",
+        "hint": "命令值 0x0002"
+      },
+      {
+        "label": "复位 CH2",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 3}",
+        "hint": "命令值 0x0003"
+      },
+      {
+        "label": "复位 CH3",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 4}",
+        "hint": "命令值 0x0004"
+      },
+      {
+        "label": "复位全部",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 16}",
+        "hint": "命令值 0x0010"
+      }
+    ]
+  },
+  {
+    "name": "写计数值",
+    "description": "FC10 写多寄存器（uint32 高字在前，必须从高字起一次写 2 个）",
+    "commands": [
+      {
+        "label": "写 CH0 值",
+        "command": "{\"fc\": 16, \"addr\": 16, \"values\": [0, 100]}",
+        "hint": "高字+低字（0x0010-0x0011）"
+      },
+      {
+        "label": "写 CH1 值",
+        "command": "{\"fc\": 16, \"addr\": 18, \"values\": [0, 100]}",
+        "hint": "高字+低字（0x0012-0x0013）"
+      },
+      {
+        "label": "写 CH2 值",
+        "command": "{\"fc\": 16, \"addr\": 20, \"values\": [0, 100]}",
+        "hint": "高字+低字（0x0014-0x0015）"
+      },
+      {
+        "label": "写 CH3 值",
+        "command": "{\"fc\": 16, \"addr\": 22, \"values\": [0, 100]}",
+        "hint": "高字+低字（0x0016-0x0017）"
+      }
+    ]
+  }
+]

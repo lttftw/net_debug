@@ -31,6 +31,8 @@ class AppStateDb {
   static const String topicTemplatesKey = 'topic_templates';
   static const String quickCommandsKey = 'quick_commands';
   static const String mqttQuickCommandsKey = 'mqtt_quick_commands';
+  static const String modbusQuickCommandsKey = 'modbus_quick_commands';
+  static const String modbusConnectionsKey = 'modbus_connections';
 
   static const String _fileName = 'app_state.db';
 

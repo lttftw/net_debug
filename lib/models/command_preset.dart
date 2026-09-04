@@ -66,6 +66,12 @@ const String kMqttPresetsAssetFull = 'assets/presets/mqtt_commands.full.json';
 /// 公开版 MQTT 快捷指令示例
 const String kMqttPresetsAssetPublic = 'assets/presets/mqtt_commands.json';
 
+/// 完整版 Modbus 快捷指令（Modbus TCP 主站调试）
+const String kModbusPresetsAssetFull = 'assets/presets/modbus_commands.full.json';
+
+/// 公开版 Modbus 快捷指令示例
+const String kModbusPresetsAssetPublic = 'assets/presets/modbus_commands.json';
+
 /// 解析预设 JSON：新版为分组数组 `[{name, description, commands:[...]}]`；
 /// 兼容旧版扁平数组 `[{label, command, hint}]`，会包装成单个「预设指令」组。
 List<CommandPresetGroup> _parsePresetGroups(String raw) {
@@ -100,6 +106,11 @@ Future<List<CommandPresetGroup>> loadCommandPresetGroups() =>
 /// 同样只从内嵌 assets 读取：完整版优先、公开示例回退。
 Future<List<CommandPresetGroup>> loadMqttCommandPresetGroups() =>
     _loadCommandPresetGroups(kMqttPresetsAssetFull, kMqttPresetsAssetPublic);
+
+/// 加载 Modbus 快捷指令组（Modbus TCP 主站功能码指令）。
+/// 只从内嵌 assets 读取：完整版优先、公开示例回退。
+Future<List<CommandPresetGroup>> loadModbusCommandPresetGroups() =>
+    _loadCommandPresetGroups(kModbusPresetsAssetFull, kModbusPresetsAssetPublic);
 
 Future<List<CommandPresetGroup>> _loadCommandPresetGroups(
   String fullAsset,

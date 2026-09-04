@@ -48,6 +48,11 @@
         "hint": "把 channel 0 换成 0–3"
       },
       {
+        "label": "设置指定值",
+        "command": "{\"counter\":{\"channel\":0,\"op\":\"set\",\"value\":100}}",
+        "hint": "channel 0–3；value 0–4294967295；可用于测试联动"
+      },
+      {
         "label": "全部清零",
         "command": "{\"counter\":{\"op\":\"reset_all\"}}"
       }
@@ -80,13 +85,13 @@
     "description": "联动规则读写（MQTT 白名单允许）",
     "commands": [
       {
-        "label": "联动 DO0 与条件",
+        "label": "联动 DO0 与条件（吸合）",
         "command": "{\"linkage\":{\"output\":0,\"expression\":\"c0>=100&&c1<20\",\"true\":true}}",
         "hint": "支持 && || == != >= <= > < 与 c0–c3"
       },
       {
-        "label": "联动 DO1 等于",
-        "command": "{\"linkage\":{\"output\":1,\"expression\":\"c2==5\",\"true\":true}}"
+        "label": "联动 DO1 等于（断开）",
+        "command": "{\"linkage\":{\"output\":1,\"expression\":\"c2==5\",\"true\":false}}"
       },
       {
         "label": "清除联动",

@@ -1,0 +1,24 @@
+[
+  {
+    "name": "示例",
+    "description": "Modbus TCP 主站调试常用指令示例（零基地址）",
+    "commands": [
+      {
+        "label": "读全部计数",
+        "command": "{\"fc\": 4, \"addr\": 16, \"count\": 8, \"as\": \"u32\"}"
+      },
+      {
+        "label": "读线圈 DO0/DO1",
+        "command": "{\"fc\": 1, \"addr\": 0, \"count\": 2}"
+      },
+      {
+        "label": "DO0 开",
+        "command": "{\"fc\": 5, \"addr\": 0, \"value\": true}"
+      },
+      {
+        "label": "计数 CH0 +1",
+        "command": "{\"fc\": 6, \"addr\": 0, \"value\": 33}"
+      }
+    ]
+  }
+]

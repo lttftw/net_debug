@@ -27,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
   final TopicTemplateService topics;
   final QuickCommandService quickCommands;
   final QuickCommandService mqttQuickCommands;
+  final QuickCommandService modbusQuickCommands;
 
   const SettingsScreen({
     super.key,
@@ -38,6 +39,7 @@ class SettingsScreen extends StatefulWidget {
     required this.topics,
     required this.quickCommands,
     required this.mqttQuickCommands,
+    required this.modbusQuickCommands,
   });
 
   @override
@@ -56,6 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TopicTemplateService get _topics => widget.topics;
   QuickCommandService get _qcs => widget.quickCommands;
   QuickCommandService get _mqttQcs => widget.mqttQuickCommands;
+  QuickCommandService get _modbusQcs => widget.modbusQuickCommands;
 
   /// 全部主题模板总数
   int get _totalTemplateCount =>
@@ -67,7 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('应用设置')),
       body: ListenableBuilder(
         listenable: Listenable.merge(
-            [_service, _mqtt, _vars, _theme, _topics, _qcs, _mqttQcs]),
+            [_service, _mqtt, _vars, _theme, _topics, _qcs, _mqttQcs, _modbusQcs]),
         builder: (context, _) {
           return Center(
             child: ConstrainedBox(
@@ -200,6 +203,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               )),
+        ),
+      ]),
+      _sectionBlock('Modbus 工具', [
+        _entryTile(
+          icon: Icons.dns_outlined,
+          title: '快捷指令',
+          subtitle:
+              '${_modbusQcs.groups.length} 组 · ${_modbusQcs.totalCount} 条可用指令',
+          onTap: () => _open(QuickCommandsScreen(
+              service: _modbusQcs, variables: _vars, title: 'Modbus 快捷指令')),
         ),
       ]),
       _sectionBlock('通用', [

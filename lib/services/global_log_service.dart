@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,7 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// 全局日志来源
-enum GlobalLogSource { tcp, mqtt, broker, app }
+enum GlobalLogSource { tcp, mqtt, broker, modbus, app }
 
 /// 全局日志条目
 class GlobalLogEntry {
@@ -33,6 +34,8 @@ class GlobalLogEntry {
         return 'MQTT';
       case GlobalLogSource.broker:
         return 'Broker';
+      case GlobalLogSource.modbus:
+        return 'Modbus';
       case GlobalLogSource.app:
         return '应用';
     }
@@ -94,7 +97,8 @@ class GlobalLogService extends ChangeNotifier {
   /// 已写入磁盘的行数（用于触发文件压缩）
   int _persistedLines = 0;
 
-  List<GlobalLogEntry> get logs => List.unmodifiable(_logs);
+  /// 只读视图（零拷贝），供 UI 懒加载读取
+  List<GlobalLogEntry> get logs => UnmodifiableListView(_logs);
 
   void log({
     required GlobalLogSource source,

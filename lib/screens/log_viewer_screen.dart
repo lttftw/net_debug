@@ -15,16 +15,26 @@ class LogViewerScreen extends StatefulWidget {
 class _LogViewerScreenState extends State<LogViewerScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  Set<GlobalLogSource> _enabledSources = {
-    GlobalLogSource.tcp,
-    GlobalLogSource.mqtt,
-    GlobalLogSource.broker,
-    GlobalLogSource.app,
-  };
+  Set<GlobalLogSource> _enabledSources = GlobalLogSource.values.toSet();
   bool _autoScroll = true;
   final _scrollCtrl = ScrollController();
 
   GlobalLogService get _service => widget.service;
+
+  /// 各来源筛选 chip 显示名
+  static const _sourceLabels = {
+    GlobalLogSource.tcp: 'TCP',
+    GlobalLogSource.mqtt: 'MQTT',
+    GlobalLogSource.broker: 'Broker',
+    GlobalLogSource.modbus: 'Modbus',
+    GlobalLogSource.app: '应用',
+  };
+
+  bool get _allSelected =>
+      _enabledSources.length == GlobalLogSource.values.length;
+
+  /// 无筛选且无搜索：直接懒加载全部日志，不做全量过滤
+  bool get _noFilter => _allSelected && _searchQuery.isEmpty;
 
   @override
   void dispose() {
@@ -33,18 +43,20 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
     super.dispose();
   }
 
-  List<GlobalLogEntry> get _filteredLogs {
-    var logs = _service.logs;
-    if (_enabledSources.length < 4) {
-      logs = logs.where((e) => _enabledSources.contains(e.source)).toList();
+  /// 构建与当前筛选/搜索匹配的日志索引（仅筛选/搜索生效时调用）。
+  /// 只存索引不复制条目，避免大日志量时的内存与时间开销。
+  List<int> _buildIndices(List<GlobalLogEntry> logs) {
+    final useSources = !_allSelected;
+    final q = _searchQuery.toLowerCase();
+    final queryEmpty = _searchQuery.isEmpty;
+    final indices = <int>[];
+    for (var i = 0; i < logs.length; i++) {
+      final e = logs[i];
+      if (useSources && !_enabledSources.contains(e.source)) continue;
+      if (!queryEmpty && !e.message.toLowerCase().contains(q)) continue;
+      indices.add(i);
     }
-    if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      logs = logs
-          .where((e) => e.message.toLowerCase().contains(q))
-          .toList();
-    }
-    return logs;
+    return indices;
   }
 
   @override
@@ -78,16 +90,35 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
             child: ListenableBuilder(
               listenable: _service,
               builder: (context, _) {
-                final logs = _filteredLogs;
+                final logs = _service.logs;
                 if (logs.isEmpty) {
                   return Center(
                     child: Text(
-                      _service.logs.isEmpty ? '暂无日志' : '没有匹配的日志',
+                      '暂无日志',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   );
+                }
+                // 无筛选/搜索：直接懒加载原始列表（不复制、不过滤）；
+                // 有筛选/搜索：按需构建匹配索引，逐项懒渲染
+                final filtered = !_noFilter;
+                final List<int> indices;
+                if (filtered) {
+                  indices = _buildIndices(logs);
+                  if (indices.isEmpty) {
+                    return Center(
+                      child: Text(
+                        '没有匹配的日志',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
+                } else {
+                  indices = const [];
                 }
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (_autoScroll && _scrollCtrl.hasClients) {
@@ -96,11 +127,10 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
                 });
                 return ListView.builder(
                   controller: _scrollCtrl,
-                  itemCount: logs.length,
-                  itemBuilder: (context, index) {
-                    final entry = logs[index];
-                    return _buildLogEntry(entry);
-                  },
+                  itemCount: filtered ? indices.length : logs.length,
+                  itemBuilder: (context, index) => _buildLogEntry(
+                    filtered ? logs[indices[index]] : logs[index],
+                  ),
                 );
               },
             ),
@@ -111,7 +141,6 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
   }
 
   Widget _buildFilterBar() {
-    final all = _enabledSources.length == 4;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(
@@ -144,38 +173,31 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _filterChip('TCP', GlobalLogSource.tcp),
-              const SizedBox(width: 6),
-              _filterChip('MQTT', GlobalLogSource.mqtt),
-              const SizedBox(width: 6),
-              _filterChip('Broker', GlobalLogSource.broker),
-              const SizedBox(width: 6),
-              _filterChip('应用', GlobalLogSource.app),
-              const Spacer(),
-              SizedBox(
-                height: 28,
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size.zero,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      if (all) {
-                        _enabledSources = {_enabledSources.first};
-                      } else {
-                        _enabledSources = {
-                          GlobalLogSource.tcp,
-                          GlobalLogSource.mqtt,
-                          GlobalLogSource.broker,
-                          GlobalLogSource.app,
-                        };
-                      }
-                    });
-                  },
-                  child: Text(all ? '全部' : '多选', style: const TextStyle(fontSize: 12)),
+              for (final s in GlobalLogSource.values)
+                _filterChip(_sourceLabels[s]!, s),
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 28),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () {
+                  setState(() {
+                    if (_allSelected) {
+                      _enabledSources = {_enabledSources.first};
+                    } else {
+                      _enabledSources = GlobalLogSource.values.toSet();
+                    }
+                  });
+                },
+                child: Text(
+                  _allSelected ? '全部' : '多选',
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ],
@@ -271,6 +293,8 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
         return Colors.teal;
       case GlobalLogSource.broker:
         return Colors.orange;
+      case GlobalLogSource.modbus:
+        return Colors.brown;
       case GlobalLogSource.app:
         return Colors.grey;
     }

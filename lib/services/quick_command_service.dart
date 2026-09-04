@@ -35,6 +35,12 @@ class QuickCommandService extends ChangeNotifier {
     presetLoader: loadMqttCommandPresetGroups,
   );
 
+  /// Modbus 快捷指令实例：独立运行时存储与 Modbus 功能码预设
+  factory QuickCommandService.modbus() => QuickCommandService(
+    storageKey: AppStateDb.modbusQuickCommandsKey,
+    presetLoader: loadModbusCommandPresetGroups,
+  );
+
   /// 运行时指令组（含组顺序与组内指令顺序）
   List<CommandPresetGroup> get groups => List.unmodifiable(_groups);
 

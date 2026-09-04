@@ -66,6 +66,7 @@
 | 日志开关 | `{"log":{"enabled":true}}` | 是 | 是 | `enabled` 为布尔值；对象只能含此字段 |
 | 计数加一 | `{"counter":{"channel":0,"op":"inc"}}` | 是 | 是 | `channel` 为 0–3 |
 | 计数清零 | `{"counter":{"channel":0,"op":"reset"}}` | 是 | 是 | `channel` 为 0–3 |
+| 计数设为指定值 | `{"counter":{"channel":0,"op":"set","value":34}}` | 是 | 是 | `channel` 为 0–3；`value` 为 0–4294967295 |
 | 全部计数清零 | `{"counter":{"op":"reset_all"}}` | 是 | 是 | 不带 `channel` |
 | 手动输出 | `{"output":{"id":0,"value":true}}` | 是 | 是 | `id` 为 0–1；`value` 为布尔值 |
 | 输出联动 | `{"linkage":{"output":0,"expression":"c0>=1","true":true}}` | 是 | 是 | `output` 为 0–1；表达式最多 127 字节 |
@@ -216,7 +217,7 @@ device_runtime=runtime,input_0=counter0,input_1=counter1,input_2=counter2,input_
 
 整个 MQTT 下行 JSON 必须小于 512 字节。
 
-设备在对应的 `service1_reply` 主题回复：
+设备在对应的 `service_reply` 主题回复：
 
 ```json
 {"ok":true}
@@ -248,11 +249,6 @@ OTA 暂停网络期间无法接收下发指令。
 
 通过 MQTT 启用 `log` 后，`event=log` 异步消息发布到同一个 `_reply` Topic，
 采用 QoS 0；执行 `{"log":{"enabled":false}}` 可停止日志流。
-
-为兼容旧平台，固件还识别 Yelink
-`thing.service.property.set`，其中 `params.counter` 必须是 0–4294967295 的整数，
-只会设置 `counter0`。该兼容入口没有共享 JSON 指令回复，新客户端应使用
-`counter` 指令。
 
 ## WiFi 扫描与连接测试
 
@@ -301,11 +297,14 @@ OTA 暂停网络期间无法接收下发指令。
 ```json
 {"counter":{"channel":0,"op":"inc"}}
 {"counter":{"channel":0,"op":"reset"}}
+{"counter":{"channel":2,"op":"set","value":100}}
 {"counter":{"op":"reset_all"}}
 ```
 
-`channel` 范围为 0–3。设备本体 GPIO10 按键**双击**同样会执行 `reset_all`（清除
-全部计数），无需管理连接；长按 3 秒则开关 softAP。
+`channel` 范围为 0–3；`set` 的 `value` 范围为 0–4294967295，直接把该路运行值
+设为指定值（可用于测试联动规则），同样触发联动重评估。设备本体 GPIO10 按键
+**双击**同样会执行 `reset_all`（清除全部计数），无需管理连接；长按 3 秒则开关
+softAP。
 
 手动控制输出：
 

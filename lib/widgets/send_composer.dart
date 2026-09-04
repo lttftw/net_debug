@@ -262,16 +262,19 @@ class _SendComposerState extends State<SendComposer> {
                 icon: const Icon(Icons.history, size: 18),
               ),
             const Spacer(),
-            if (_format == ComposerFormat.json) ...[
-              IconButton.outlined(
-                tooltip: '格式化 / 校验 JSON',
-                style: _squareButtonStyle,
-                onPressed: _formatPayload,
-                icon: const Icon(Icons.auto_fix_high, size: 18),
-              ),
-              const SizedBox(width: 8),
-            ],
-            _buildFormatSwitcher(),
+            // JSON 格式化按钮始终占位：文本模式下禁用，
+            // 避免切换模式时后续按键位置移动
+            IconButton.outlined(
+              tooltip: _format == ComposerFormat.json
+                  ? '格式化 / 校验 JSON'
+                  : '格式化 / 校验 JSON（需切到 JSON 模式）',
+              style: _squareButtonStyle,
+              onPressed:
+                  _format == ComposerFormat.json ? _formatPayload : null,
+              icon: const Icon(Icons.auto_fix_high, size: 18),
+            ),
+            const SizedBox(width: 8),
+            _buildFormatDropdown(),
             const SizedBox(width: 8),
             _buildSendButton(),
           ],
@@ -286,60 +289,65 @@ class _SendComposerState extends State<SendComposer> {
     padding: EdgeInsets.zero,
   );
 
-  /// JSON/文本格式切换：紧凑圆角矩形分段控件，仅文字、无图标。
-  Widget _buildFormatSwitcher() {
+  /// JSON/文本格式切换：紧凑下拉框。
+  /// 以最长文案「JSON」的实测宽度为固定宽度，两种模式一致且不折叠。
+  Widget _buildFormatDropdown() {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildFormatSegment('文本', ComposerFormat.text),
-          _buildFormatSegment('JSON', ComposerFormat.json),
-        ],
-      ),
+    // 与渲染使用完全一致的字样式（含主题字体），避免测量与渲染字体不一致
+    // 导致宽度偏小、内容溢出；再留 4px 安全余量
+    final labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: scheme.onSurface,
+      fontFamily: DefaultTextStyle.of(context).style.fontFamily,
     );
-  }
-
-  Widget _buildFormatSegment(String label, ComposerFormat value) {
-    final scheme = Theme.of(context).colorScheme;
-    final selected = _format == value;
-    return InkWell(
-      borderRadius: BorderRadius.circular(4),
-      onTap: () => setState(() => _format = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? scheme.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
+    final measure = TextPainter(
+      text: TextSpan(text: 'JSON', style: labelStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final width = measure.width + 2 + 16 + 12 + 2 + 4; // 文本+间距+箭头+内边距+边框+余量
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          onPressed: () => setState(() => _format = ComposerFormat.text),
+          child: const Text('文本'),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+        MenuItemButton(
+          onPressed: () => setState(() => _format = ComposerFormat.json),
+          child: const Text('JSON'),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          child: Container(
+            width: width,
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _format == ComposerFormat.json ? 'JSON' : '文本',
+                  style: labelStyle,
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.arrow_drop_down,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -393,7 +401,9 @@ class _SendComposerState extends State<SendComposer> {
   }
 
   Widget _buildSendButton() {
+    // 固定最小宽度：发送/发送中/发布文案不同也不会引起按键尺寸变化
     return FilledButton.icon(
+      style: FilledButton.styleFrom(minimumSize: const Size(104, 46)),
       onPressed: widget.sending ? null : _send,
       icon: widget.sending
           ? const SizedBox.square(

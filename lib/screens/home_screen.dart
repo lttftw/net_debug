@@ -380,6 +380,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
+                // 固定宽度：连接/连接中…/断开 文案不同也不会引起尺寸变化
+                style: FilledButton.styleFrom(minimumSize: const Size(104, 46)),
                 onPressed: connecting
                     ? null
                     : (connected ? _service.disconnect : _connect),
