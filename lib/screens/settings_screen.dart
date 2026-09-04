@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/global_log_service.dart';
+import '../services/mqtt_service.dart';
 import '../services/quick_command_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
@@ -19,6 +20,7 @@ import 'variables_screen.dart';
 /// 设置页（一级）：按工具分类的简洁入口列表，具体设置项在二级页面中。
 class SettingsScreen extends StatefulWidget {
   final TcpService service;
+  final MqttService mqtt;
   final VariablesService variables;
   final ThemeService theme;
   final GlobalLogService globalLog;
@@ -29,6 +31,7 @@ class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.service,
+    required this.mqtt,
     required this.variables,
     required this.theme,
     required this.globalLog,
@@ -46,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _otaProtocolAsset = 'assets/docs/OTA_PROTOCOL.md';
 
   TcpService get _service => widget.service;
+  MqttService get _mqtt => widget.mqtt;
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
   GlobalLogService get _globalLog => widget.globalLog;
@@ -63,7 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('应用设置')),
       body: ListenableBuilder(
         listenable: Listenable.merge(
-            [_service, _vars, _theme, _topics, _qcs, _mqttQcs]),
+            [_service, _mqtt, _vars, _theme, _topics, _qcs, _mqttQcs]),
         builder: (context, _) {
           return Center(
             child: ConstrainedBox(
@@ -103,7 +107,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '历史记录',
           subtitle:
               '指令 ${_service.history.length} 条 · 连接 ${_service.connections.length} 条',
-          onTap: () => _open(HistoryScreen(service: _service)),
+          onTap: () => _open(HistoryScreen(
+                title: 'TCP 历史记录',
+                listenable: _service,
+                buildSections: () => [
+                  HistorySection(
+                    icon: Icons.send_outlined,
+                    title: '指令历史',
+                    count: '${_service.history.length} 条',
+                    canClear: _service.history.isNotEmpty,
+                    onClear: _service.clearHistory,
+                  ),
+                  HistorySection(
+                    icon: Icons.link_off,
+                    title: '连接历史',
+                    count: '${_service.connections.length} 条',
+                    canClear: _service.connections.isNotEmpty,
+                    onClear: _service.clearConnections,
+                  ),
+                ],
+              )),
         ),
         ListTile(
           leading: const Icon(Icons.system_update_alt),
@@ -145,6 +168,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () => _open(QuickCommandsScreen(
               service: _mqttQcs, variables: _vars, title: 'MQTT 快捷指令')),
         ),
+        _entryTile(
+          icon: Icons.widgets_outlined,
+          title: '主题模板',
+          subtitle:
+              '${_topics.groups.length} 个模板组 · $_totalTemplateCount 个模板，可在 MQTT 页下拉选择',
+          onTap: () => _open(TopicTemplateScreen(service: _topics)),
+        ),
+        _entryTile(
+          icon: Icons.history,
+          title: '历史记录',
+          subtitle:
+              '指令 ${_mqtt.history.length} 条 · 连接 ${_mqtt.connections.length} 条',
+          onTap: () => _open(HistoryScreen(
+                title: 'MQTT 历史记录',
+                listenable: _mqtt,
+                buildSections: () => [
+                  HistorySection(
+                    icon: Icons.send_outlined,
+                    title: '指令历史',
+                    count: '${_mqtt.history.length} 条',
+                    canClear: _mqtt.history.isNotEmpty,
+                    onClear: _mqtt.clearHistory,
+                  ),
+                  HistorySection(
+                    icon: Icons.link_off,
+                    title: '连接历史',
+                    count: '${_mqtt.connections.length} 条',
+                    canClear: _mqtt.connections.isNotEmpty,
+                    onClear: _mqtt.clearConnections,
+                  ),
+                ],
+              )),
+        ),
       ]),
       _sectionBlock('通用', [
         _entryTile(
@@ -154,33 +210,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () => _open(VariablesScreen(service: _vars)),
         ),
         _entryTile(
-          icon: Icons.widgets_outlined,
-          title: '主题模板',
-          subtitle:
-              '${_topics.groups.length} 个模板组 · $_totalTemplateCount 个模板，可在 MQTT 页下拉选择',
-          onTap: () => _open(TopicTemplateScreen(service: _topics)),
-        ),
-        _entryTile(
           icon: Icons.palette_outlined,
           title: '主题外观',
-          subtitle: '亮暗模式、配色、消息样式与日志字号',
+          subtitle: '亮暗模式、配色、消息样式、日志字号与记录区上限',
           onTap: () => _open(ThemeScreen(theme: _theme)),
         ),
       ]),
-      _sectionBlock('小工具', [
-        _entryTile(
-          icon: Icons.build_circle_outlined,
-          title: '小工具合集',
-          subtitle: '文本与二维码互转等独立小工具',
-          onTap: () => _open(const ToolsScreen()),
-        ),
-      ]),
-      _sectionBlock('帮助', [
+      _sectionBlock('关于与帮助', [
         _entryTile(
           icon: Icons.menu_book_outlined,
           title: '指令协议文档',
           subtitle: '查看内置协议文档',
           onTap: () => _open(const ProtocolDocsScreen()),
+        ),
+        _entryTile(
+          icon: Icons.build_circle_outlined,
+          title: '小工具合集',
+          subtitle: '文本与二维码互转等独立小工具',
+          onTap: () => _open(const ToolsScreen()),
         ),
         _entryTile(
           icon: Icons.list_alt,

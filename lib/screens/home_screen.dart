@@ -12,6 +12,7 @@ import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/recent_connections_section.dart';
 import '../widgets/send_composer.dart';
 import 'quick_commands_screen.dart';
 
@@ -45,9 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   final FocusNode _cmdFocus = FocusNode();
   bool _connectionInitialized = false;
-  String? _connectionError;
   bool _sending = false;
-  bool _connectionExpanded = true;
   bool _commandExpanded = true;
   bool _focusMode = false;
 
@@ -93,19 +92,37 @@ class _HomeScreenState extends State<HomeScreen> {
     final host = _hostCtrl.text.trim();
     final port = int.tryParse(_portCtrl.text.trim());
     if (host.isEmpty || port == null || port < 1 || port > 65535) {
-      setState(() => _connectionError = '请输入有效的服务器地址和 1–65535 端口');
+      // 未配置时引导打开配置面板
+      _openConfigPanel();
       return;
     }
-    setState(() => _connectionError = null);
     await _service.connect(host, port);
     if (!mounted) return;
+    if (_service.status != TcpStatus.connected) {
+      showAppToast(context, '连接失败，请检查地址和端口是否正确');
+    }
+  }
+
+  /// 打开连接配置弹窗（对齐 MQTT 配置面板）；返回后回填 host/port 并可触发连接。
+  Future<void> _openConfigPanel() async {
+    final result = await showModalBottomSheet<TcpConfigResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _TcpConfigPanel(
+        service: _service,
+        initialHost: _hostCtrl.text,
+        initialPort: _portCtrl.text,
+      ),
+    );
+    if (result == null || !mounted) return;
     setState(() {
-      if (_service.status == TcpStatus.connected) {
-        _connectionExpanded = false;
-      } else {
-        _connectionError = '连接失败，请检查地址和端口是否正确';
-      }
+      _hostCtrl.text = result.host;
+      _portCtrl.text = result.port.toString();
     });
+    if (result.connect) {
+      await _connect();
+    }
   }
 
   /// 发送回调（SendComposer 已展开/校验内容）：更新发送中状态并交给 TcpService。
@@ -152,32 +169,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-  }
-
-  /// 清空连接历史（带确认）
-  Future<void> _confirmClearConnections() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('清空连接历史'),
-        content: const Text('确定删除全部连接历史？此操作不可恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogCtx).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await _service.clearConnections();
   }
 
   void _showOtaPanel() {
@@ -227,6 +218,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: _showOtaPanel,
                   ),
                 IconButton(
+                  tooltip: '连接配置',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _openConfigPanel,
+                ),
+                IconButton(
                   tooltip: '通信专注模式',
                   icon: const Icon(Icons.fullscreen),
                   onPressed: () => setState(() {
@@ -259,21 +255,21 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: _buildLogView(margin: EdgeInsets.zero)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildConnectionBar(),
+                        Expanded(child: _buildLogView()),
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   SizedBox(
                     width: 360,
                     child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildConnectionBar(compact: false),
-                          const SizedBox(height: 12),
-                          _buildQuickCommandBar(),
-                          const SizedBox(height: 12),
-                          _buildCommandPanel(),
-                        ],
-                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: _buildSendAreaContent(collapsible: false),
                     ),
                   ),
                 ],
@@ -282,11 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                child: _buildConnectionBar(compact: true),
-              ),
-              _buildQuickCommandBar(),
+              _buildConnectionBar(),
               Expanded(child: _buildLogView()),
               _buildInputBar(collapsible: true),
             ],
@@ -339,189 +331,74 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildConnectionBar({required bool compact}) {
+  /// 紧凑连接状态栏（对齐 MQTT）：状态徽标 + 端点 + 连接按钮。
+  /// 连接配置（地址/端口/历史）收纳在底部弹窗中。
+  Widget _buildConnectionBar() {
     return ListenableBuilder(
       listenable: _service,
       builder: (context, _) {
         final connected = _service.status == TcpStatus.connected;
         final connecting = _service.status == TcpStatus.connecting;
         final statusText = connected ? '已连接' : (connecting ? '连接中' : '未连接');
-        final statusColor = connected
-            ? Theme.of(context).colorScheme.primary
-            : (connecting
-                  ? Colors.orange
-                  : Theme.of(context).colorScheme.onSurfaceVariant);
+        final color = connected
+            ? Colors.greenAccent
+            : (connecting ? Colors.amber : Colors.grey);
         final endpoint = _hostCtrl.text.trim().isEmpty
             ? '未配置服务器'
             : '${_hostCtrl.text.trim()}:${_portCtrl.text.trim()}';
-        Widget connectionButton({required bool collapsed}) {
-          return FilledButton.icon(
-            style: collapsed
-                ? FilledButton.styleFrom(
-                    minimumSize: const Size(0, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    visualDensity: VisualDensity.compact,
-                  )
-                : null,
-            onPressed: connecting
-                ? null
-                : (connected ? _service.disconnect : _connect),
-            icon: connecting
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    connected ? Icons.link_off : Icons.link,
-                    size: collapsed ? 16 : null,
-                  ),
-            label: Text(
-              connected
-                  ? (collapsed ? '断开' : '断开连接')
-                  : (connecting ? '连接中…' : '连接'),
-            ),
-          );
-        }
-
-        final fields = Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _hostCtrl,
-                enabled: !connected && !connecting,
-                onChanged: (_) => setState(() => _connectionError = null),
-                decoration: InputDecoration(
-                  labelText: '服务器地址',
-                  hintText: '例如 192.168.1.100',
-                  suffixIcon: ListenableBuilder(
-                    listenable: _service,
-                    builder: (context, _) {
-                      final conns = _service.connections;
-                      if (conns.isEmpty) return const SizedBox.shrink();
-                      return PopupMenuButton<int>(
-                        tooltip: '历史连接',
-                        icon: const Icon(Icons.history, size: 20),
-                        onSelected: (v) {
-                          if (v < 0) {
-                            _confirmClearConnections();
-                            return;
-                          }
-                          final c = conns[v];
-                          setState(() {
-                            _hostCtrl.text = c.host;
-                            _portCtrl.text = c.port.toString();
-                            _connectionError = null;
-                          });
-                        },
-                        itemBuilder: (context) => [
-                          for (var i = 0; i < conns.length; i++)
-                            PopupMenuItem(
-                              value: i,
-                              child: Text(
-                                conns[i].label,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
-                            value: -1,
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_sweep_outlined, size: 16),
-                                SizedBox(width: 8),
-                                Text('清空连接历史'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 88,
-              child: TextField(
-                controller: _portCtrl,
-                enabled: !connected && !connecting,
-                onChanged: (_) => setState(() => _connectionError = null),
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '端口'),
-              ),
-            ),
-          ],
-        );
-        return Card(
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 10 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      connected
-                          ? Icons.check_circle
-                          : (connecting ? Icons.sync : Icons.circle_outlined),
-                      size: 18,
-                      color: statusColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      statusText,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        endpoint,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    if (!_connectionExpanded) ...[
-                      const SizedBox(width: 8),
-                      connectionButton(collapsed: true),
-                    ],
-                    IconButton(
-                      tooltip: _connectionExpanded ? '收起连接配置' : '展开连接配置',
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(
-                        _connectionExpanded
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                      ),
-                      onPressed: () => setState(
-                        () => _connectionExpanded = !_connectionExpanded,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  endpoint,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                if (_connectionExpanded) ...[
-                  const SizedBox(height: 12),
-                  fields,
-                ],
-                if (_connectionError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _connectionError!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-                if (_connectionExpanded) ...[
-                  const SizedBox(height: 10),
-                  connectionButton(collapsed: false),
-                ],
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${_service.logs.length}/${_service.maxLogs}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: connecting
+                    ? null
+                    : (connected ? _service.disconnect : _connect),
+                icon: connecting
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        connected ? Icons.link_off : Icons.link,
+                        size: 18,
+                      ),
+                label: Text(
+                  connected
+                      ? '断开'
+                      : (connecting ? '连接中…' : '连接'),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -651,72 +528,225 @@ class _HomeScreenState extends State<HomeScreen> {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (collapsible && _commandExpanded)
-              Row(
-                children: [
-                  Text('发送指令', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: '收起指令区',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.keyboard_arrow_down),
-                    onPressed: () => setState(() => _commandExpanded = false),
-                  ),
-                ],
-              ),
-            SendComposer(
-              controller: _cmdCtrl,
-              variables: _vars,
-              focusNode: _cmdFocus,
-              onSend: _handleTcpSend,
-              labelText: 'JSON 指令',
-              hintText: '{"get":"status"}',
-              minLines: 2,
-              maxLines: 4,
-              onChanged: (_) => setState(() {}),
-              history: _tcpHistory,
-              onClearHistory: _service.clearHistory,
-              sending: _sending,
-              collapsed: collapsible && !_commandExpanded,
-              onExpand: () => setState(() => _commandExpanded = true),
-            ),
-          ],
-        ),
+        child: _buildSendAreaContent(collapsible: collapsible),
       ),
     );
   }
 
-  Widget _buildCommandPanel() {
+  /// 发送区内容：标题行 + 快捷指令 + 输入框，统一 Card 背景。
+  /// 窄屏底部与宽屏右侧共用；[collapsible] 为 true 时支持折叠。
+  Widget _buildSendAreaContent({required bool collapsible}) {
+    final expanded = !collapsible || _commandExpanded;
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
+        child: expanded
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.terminal,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '发送指令',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const Spacer(),
+                      if (collapsible)
+                        IconButton(
+                          tooltip: '收起指令区',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          onPressed: () =>
+                              setState(() => _commandExpanded = false),
+                        )
+                      else
+                        Text(
+                          'Ctrl + Enter 快速发送',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildQuickCommandBar(),
+                  const SizedBox(height: 8),
+                  SendComposer(
+                    controller: _cmdCtrl,
+                    variables: _vars,
+                    focusNode: _cmdFocus,
+                    onSend: _handleTcpSend,
+                    labelText: 'JSON 指令',
+                    hintText: '{"get":"status"}',
+                    minLines: collapsible ? 2 : 4,
+                    maxLines: collapsible ? 4 : 10,
+                    onChanged: (_) => setState(() {}),
+                    history: _tcpHistory,
+                    onClearHistory: _service.clearHistory,
+                    sending: _sending,
+                  ),
+                ],
+              )
+            : SendComposer(
+                controller: _cmdCtrl,
+                variables: _vars,
+                focusNode: _cmdFocus,
+                onSend: _handleTcpSend,
+                labelText: 'JSON 指令',
+                hintText: '{"get":"status"}',
+                collapsed: true,
+                onExpand: () => setState(() => _commandExpanded = true),
+                sending: _sending,
+              ),
+      ),
+    );
+  }
+}
+
+/// 连接配置弹窗返回值：host/port 与是否立即连接。
+class TcpConfigResult {
+  final String host;
+  final int port;
+  final bool connect;
+
+  const TcpConfigResult(this.host, this.port, this.connect);
+}
+
+/// TCP 连接配置弹窗（对齐 MQTT 配置面板）：地址/端口 + 最近连接 + 保存/连接。
+class _TcpConfigPanel extends StatefulWidget {
+  final TcpService service;
+  final String initialHost;
+  final String initialPort;
+
+  const _TcpConfigPanel({
+    required this.service,
+    required this.initialHost,
+    required this.initialPort,
+  });
+
+  @override
+  State<_TcpConfigPanel> createState() => _TcpConfigPanelState();
+}
+
+class _TcpConfigPanelState extends State<_TcpConfigPanel> {
+  late final TextEditingController _hostCtrl = TextEditingController(
+    text: widget.initialHost,
+  );
+  late final TextEditingController _portCtrl = TextEditingController(
+    text: widget.initialPort,
+  );
+
+  @override
+  void dispose() {
+    _hostCtrl.dispose();
+    _portCtrl.dispose();
+    super.dispose();
+  }
+
+  (String, int)? _parse() {
+    final host = _hostCtrl.text.trim();
+    final port = int.tryParse(_portCtrl.text.trim());
+    if (host.isEmpty || port == null || port < 1 || port > 65535) return null;
+    return (host, port);
+  }
+
+  void _finish({required bool connect}) {
+    final parsed = _parse();
+    if (parsed == null) {
+      showAppToast(context, '请输入有效的服务器地址和 1–65535 端口');
+      return;
+    }
+    Navigator.pop(context, TcpConfigResult(parsed.$1, parsed.$2, connect));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('发送指令', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              'Ctrl + Enter 快速发送',
-              style: Theme.of(context).textTheme.bodySmall,
+            Text('连接配置', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: 240,
+                  child: TextField(
+                    controller: _hostCtrl,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: '服务器地址',
+                      hintText: '例如 192.168.1.100',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: TextField(
+                    controller: _portCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      labelText: '端口',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            SendComposer(
-              controller: _cmdCtrl,
-              variables: _vars,
-              focusNode: _cmdFocus,
-              onSend: _handleTcpSend,
-              labelText: 'JSON 指令',
-              hintText: '{"get":"status"}',
-              minLines: 4,
-              maxLines: 10,
-              onChanged: (_) => setState(() {}),
-              history: _tcpHistory,
-              onClearHistory: _service.clearHistory,
-              sending: _sending,
+            ListenableBuilder(
+              listenable: widget.service,
+              builder: (context, _) {
+                final conns = widget.service.connections;
+                return RecentConnectionsSection(
+                  labels: [for (final c in conns) c.label],
+                  onSelected: (i) {
+                    final c = conns[i];
+                    setState(() {
+                      _hostCtrl.text = c.host;
+                      _portCtrl.text = c.port.toString();
+                    });
+                  },
+                  onClear: widget.service.clearConnections,
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _finish(connect: true),
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text('连接'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _finish(connect: false),
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: const Text('仅保存'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

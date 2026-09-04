@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart' as mqtt;
 import 'package:mqtt_client/mqtt_server_client.dart' as mqtt_server;
 
+import 'app_settings_service.dart';
 import 'app_state_db.dart';
 import 'global_log_service.dart';
 
@@ -26,6 +27,40 @@ class MqttLogEntry {
   final String? topic;
 
   const MqttLogEntry(this.time, this.kind, this.message, {this.topic});
+}
+
+/// 一条 MQTT 连接历史（broker 地址）。
+class MqttConnectionProfile {
+  final String host;
+  final int port;
+
+  const MqttConnectionProfile(this.host, this.port);
+
+  Map<String, dynamic> toJson() => {'host': host, 'port': port};
+
+  factory MqttConnectionProfile.fromJson(Map<String, dynamic> json) =>
+      MqttConnectionProfile(json['host'] as String, json['port'] as int);
+
+  String get label => '$host:$port';
+}
+
+/// 一条 MQTT 发布指令历史。
+class MqttHistoryEntry {
+  final String command;
+  final DateTime time;
+
+  const MqttHistoryEntry(this.command, this.time);
+
+  Map<String, dynamic> toJson() => {
+    'cmd': command,
+    'time': time.toIso8601String(),
+  };
+
+  factory MqttHistoryEntry.fromJson(Map<String, dynamic> json) =>
+      MqttHistoryEntry(
+        json['cmd'] as String,
+        DateTime.tryParse(json['time'] as String? ?? '') ?? DateTime.now(),
+      );
 }
 
 /// 保存的 MQTT 客户端连接配置。
@@ -85,13 +120,25 @@ class MqttClientConfig {
 /// 独立的 MQTT 调试客户端服务：负责 broker 连接、订阅、发布与消息日志，
 /// 与 TcpService 完全解耦，可作为独立的调试工具使用。
 class MqttService extends ChangeNotifier {
-  /// 消息/事件历史条数上限（默认 100 条，可调整）
-  int maxLogs = 100;
+  MqttService() {
+    // 消息区数量上限变化时同步刷新 UI
+    AppSettingsService.instance.addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() => notifyListeners();
+
+  /// 消息/事件历史条数上限（来自应用设置，默认 100 条）
+  int get maxLogs => AppSettingsService.instance.maxLogs;
+
+  static const _kMaxConnections = 10;
+  static const _kMaxHistory = 100;
 
   mqtt_server.MqttServerClient? _client;
   MqttConnStatus _status = MqttConnStatus.disconnected;
   final List<MqttLogEntry> _logs = [];
   final List<String> _subscriptions = [];
+  final List<MqttConnectionProfile> _connections = [];
+  final List<MqttHistoryEntry> _history = [];
   final Map<String, Color> _topicColors = {};
   final math.Random _topicColorRandom = math.Random();
   Future<String>? _installationIdFuture;
@@ -110,6 +157,9 @@ class MqttService extends ChangeNotifier {
   bool get isConnected => _status == MqttConnStatus.connected;
   List<MqttLogEntry> get logs => List.unmodifiable(_logs);
   List<String> get subscriptions => List.unmodifiable(_subscriptions);
+  List<MqttConnectionProfile> get connections =>
+      List.unmodifiable(_connections);
+  List<MqttHistoryEntry> get history => List.unmodifiable(_history);
   MqttClientConfig get config => _config;
 
   // ---------- 配置 / 订阅持久化（本地 JSON 文件） ----------
@@ -127,6 +177,30 @@ class MqttService extends ChangeNotifier {
         AppStateDb.mqttInstallationIdKey,
         'mqtt_installation_id.txt',
       );
+      final connsRaw = await AppStateDb.instance
+          .read(AppStateDb.mqttConnectionsKey);
+      if (connsRaw != null) {
+        final list = jsonDecode(connsRaw) as List;
+        _connections
+          ..clear()
+          ..addAll([
+            for (final item in list)
+              MqttConnectionProfile.fromJson(
+                (item as Map).cast<String, dynamic>(),
+              ),
+          ]);
+      }
+      final historyRaw =
+          await AppStateDb.instance.read(AppStateDb.mqttHistoryKey);
+      if (historyRaw != null) {
+        final list = jsonDecode(historyRaw) as List;
+        _history
+          ..clear()
+          ..addAll([
+            for (final item in list)
+              MqttHistoryEntry.fromJson((item as Map).cast<String, dynamic>()),
+          ]);
+      }
       final installationId = await _ensureInstallationId();
       final configRaw =
           await AppStateDb.instance.read(AppStateDb.mqttConfigKey);
@@ -176,6 +250,56 @@ class MqttService extends ChangeNotifier {
       AppStateDb.mqttSubscriptionsKey,
       jsonEncode(_subscriptions),
     );
+  }
+
+  /// 记录一次成功的连接（去重、限量、持久化）
+  void _saveConnection(String host, int port) {
+    _connections.removeWhere((c) => c.host == host && c.port == port);
+    _connections.insert(0, MqttConnectionProfile(host, port));
+    if (_connections.length > _kMaxConnections) {
+      _connections.removeRange(_kMaxConnections, _connections.length);
+    }
+    _saveConnections();
+    notifyListeners();
+  }
+
+  Future<void> _saveConnections() async {
+    await AppStateDb.instance.write(
+      AppStateDb.mqttConnectionsKey,
+      jsonEncode([for (final c in _connections) c.toJson()]),
+    );
+  }
+
+  /// 清空连接历史（内存 + 持久化）
+  Future<void> clearConnections() async {
+    _connections.clear();
+    _saveConnections();
+    notifyListeners();
+  }
+
+  /// 记录一次成功发布的指令（去重、限量、持久化）
+  void _addHistory(String command) {
+    _history.removeWhere((e) => e.command == command);
+    _history.insert(0, MqttHistoryEntry(command, DateTime.now()));
+    if (_history.length > _kMaxHistory) {
+      _history.removeRange(_kMaxHistory, _history.length);
+    }
+    _saveHistory();
+    notifyListeners();
+  }
+
+  Future<void> _saveHistory() async {
+    await AppStateDb.instance.write(
+      AppStateDb.mqttHistoryKey,
+      jsonEncode([for (final e in _history) e.toJson()]),
+    );
+  }
+
+  /// 清空指令历史（内存 + 持久化）
+  Future<void> clearHistory() async {
+    _history.clear();
+    _saveHistory();
+    notifyListeners();
   }
 
   // ---------- 连接管理 ----------
@@ -293,6 +417,7 @@ class MqttService extends ChangeNotifier {
     }
     _setStatus(MqttConnStatus.connected);
     _addLog(MqttLogKind.system, '已连接 ${cfg.host}:${cfg.port}');
+    _saveConnection(cfg.host.trim(), cfg.port);
   }
 
   Future<void> disconnect({bool quiet = false}) async {
@@ -373,6 +498,7 @@ class MqttService extends ChangeNotifier {
     final builder = mqtt.MqttClientPayloadBuilder()..addUTF8String(payload);
     c.publishMessage(t, _qosFromInt(qos), builder.payload!);
     _addLog(MqttLogKind.tx, payload, topic: t);
+    _addHistory(payload);
   }
 
   mqtt.MqttQos _qosFromInt(int qos) => switch (qos) {
@@ -511,6 +637,7 @@ class MqttService extends ChangeNotifier {
 
   @override
   void dispose() {
+    AppSettingsService.instance.removeListener(_onSettingsChanged);
     _updatesSub?.cancel();
     final c = _client;
     _client = null;

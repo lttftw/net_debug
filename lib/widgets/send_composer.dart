@@ -90,18 +90,35 @@ class _SendComposerState extends State<SendComposer> {
   }
 
   void _formatPayload() {
-    final text = widget.controller.text;
-    if (text.trim().isEmpty) {
-      _snack('内容为空');
+    final text = widget.controller.text.trim();
+    if (text.isEmpty) {
+      _showFormatDialog('内容为空', '请先输入要格式化的 JSON 内容');
       return;
     }
     final err = _validateJson(text);
     if (err != null) {
-      _snack('JSON 语法错误: $err');
+      _showFormatDialog('不是有效的 JSON', 'JSON 语法错误：$err');
       return;
     }
     widget.controller.text = const JsonEncoder.withIndent('  ')
-        .convert(jsonDecode(text));
+        .convert(jsonDecode(widget.controller.text));
+  }
+
+  /// 格式化失败时弹窗提示（非 JSON 内容）。
+  Future<void> _showFormatDialog(String title, String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _clear() {
@@ -249,9 +266,7 @@ class _SendComposerState extends State<SendComposer> {
               IconButton.outlined(
                 tooltip: '格式化 / 校验 JSON',
                 style: _squareButtonStyle,
-                onPressed: widget.controller.text.trim().isEmpty
-                    ? null
-                    : _formatPayload,
+                onPressed: _formatPayload,
                 icon: const Icon(Icons.auto_fix_high, size: 18),
               ),
               const SizedBox(width: 8),

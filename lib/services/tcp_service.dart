@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'app_settings_service.dart';
 import 'app_state_db.dart';
 import 'global_log_service.dart';
 
@@ -71,9 +72,18 @@ class OtaProgress {
 
 /// TCP 连接管理：负责连接、按行解析响应、发送指令、日志、历史与 OTA。
 class TcpService extends ChangeNotifier {
-  static const _kMaxLogs = 2000;
   static const _kMaxHistory = 100;
   static const _kMaxConnections = 10;
+
+  /// 消息区数量上限（来自应用设置，默认 100）
+  int get maxLogs => AppSettingsService.instance.maxLogs;
+
+  TcpService() {
+    // 消息区数量上限变化时同步刷新 UI
+    AppSettingsService.instance.addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() => notifyListeners();
 
   Socket? _socket;
   TcpStatus _status = TcpStatus.disconnected;
@@ -739,9 +749,10 @@ class TcpService extends ChangeNotifier {
   }
 
   void _addLog(LogKind kind, String message) {
+    final max = AppSettingsService.instance.maxLogs;
     _logs.add(LogEntry(DateTime.now(), kind, message));
-    if (_logs.length > _kMaxLogs) {
-      _logs.removeRange(0, _logs.length - _kMaxLogs);
+    if (_logs.length > max) {
+      _logs.removeRange(0, _logs.length - max);
     }
     _globalLog?.log(
       source: GlobalLogSource.tcp,
@@ -760,6 +771,7 @@ class TcpService extends ChangeNotifier {
 
   @override
   void dispose() {
+    AppSettingsService.instance.removeListener(_onSettingsChanged);
     _pendingTimer?.cancel();
     _socket?.destroy();
     _db?.close();

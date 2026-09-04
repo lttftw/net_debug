@@ -22,8 +22,11 @@ class AppStateDb {
   /// 各运行时数据在 kv 表中的键
   static const String themeKey = 'theme';
   static const String tcpSettingsKey = 'tcp_settings';
+  static const String logLimitKey = 'log_limit';
   static const String mqttConfigKey = 'mqtt_config';
   static const String mqttSubscriptionsKey = 'mqtt_subscriptions';
+  static const String mqttConnectionsKey = 'mqtt_connections';
+  static const String mqttHistoryKey = 'mqtt_history';
   static const String mqttInstallationIdKey = 'mqtt_installation_id';
   static const String topicTemplatesKey = 'topic_templates';
   static const String quickCommandsKey = 'quick_commands';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_settings_service.dart';
 import '../services/global_log_service.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
@@ -47,6 +48,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _mqttService.init(globalLog: _globalLog);
     _brokerService.init(globalLog: _globalLog);
     _globalLog.load();
+    AppSettingsService.instance.load();
     _tcpService.loadHistory();
     _tcpService.loadSettings();
     _mqttService.loadConfig();
@@ -89,6 +91,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       ),
       SettingsScreen(
         service: _tcpService,
+        mqtt: _mqttService,
         variables: _vars,
         theme: _theme,
         globalLog: _globalLog,

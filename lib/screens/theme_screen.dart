@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/message_display_style.dart';
+import '../services/app_settings_service.dart';
 import '../services/theme_service.dart';
 
 /// 二级页：主题外观设置。主色（seed）与收发记录色统一在此配置。
@@ -43,7 +44,7 @@ class _ThemeScreenState extends State<ThemeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('外观')),
       body: ListenableBuilder(
-        listenable: _theme,
+        listenable: Listenable.merge([_theme, AppSettingsService.instance]),
         builder: (context, _) {
           return ListView(
             children: [
@@ -167,6 +168,47 @@ class _ThemeScreenState extends State<ThemeScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              _sectionTitle('消息区数量上限'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: AppSettingsService
+                            .instance.maxLogs
+                            .clamp(50, 2000)
+                            .toDouble(),
+                        min: 50,
+                        max: 2000,
+                        divisions: 39,
+                        label: '${AppSettingsService.instance.maxLogs}',
+                        onChanged: (v) =>
+                            AppSettingsService.instance.setMaxLogs(v.round()),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${AppSettingsService.instance.maxLogs}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'TCP / MQTT 消息记录区条数上限',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ),
               Padding(

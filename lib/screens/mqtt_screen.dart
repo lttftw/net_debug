@@ -11,6 +11,7 @@ import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/recent_connections_section.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
 import 'quick_commands_screen.dart';
@@ -55,7 +56,6 @@ class _MqttScreenState extends State<MqttScreen> {
   int _qos = 0;
   bool _composerExpanded = true;
   bool _focusMode = false;
-  final List<String> _pubHistory = [];
 
   MqttService get _service => widget.service;
   VariablesService get _vars => widget.variables;
@@ -177,8 +177,6 @@ class _MqttScreenState extends State<MqttScreen> {
       return false;
     }
     _service.publish(topic, content, qos: _qos);
-    _pubHistory.insert(0, content);
-    if (_pubHistory.length > 50) _pubHistory.removeLast();
     return true;
   }
 
@@ -321,13 +319,11 @@ class _MqttScreenState extends State<MqttScreen> {
                       const SizedBox(width: 12),
                       SizedBox(
                         width: 360,
-                        child: Card(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(14),
-                            child: _buildSendPanel(
-                              compact: false,
-                              embedded: true,
-                            ),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(14),
+                          child: _buildSendPanel(
+                            compact: false,
+                            embedded: true,
                           ),
                         ),
                       ),
@@ -701,78 +697,89 @@ class _MqttScreenState extends State<MqttScreen> {
 
   Widget _buildSendPanel({required bool compact, bool embedded = false}) {
     final expanded = !compact || _composerExpanded;
-    final panel = expanded
-        ? Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+    final panel = Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: expanded
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.outbox_outlined,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text('发布消息', style: Theme.of(context).textTheme.titleMedium),
-                  const Spacer(),
-                  if (compact)
-                    IconButton(
-                      tooltip: '收起发布区',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      onPressed: () =>
-                          setState(() => _composerExpanded = false),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _buildQuickCommandBar(),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTopicMenu(
-                      controller: _pubTopicCtrl,
-                      label: '发送主题',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButton<int>(
-                    value: _qos,
-                    items: const [
-                      DropdownMenuItem(value: 0, child: Text('QoS 0')),
-                      DropdownMenuItem(value: 1, child: Text('QoS 1')),
-                      DropdownMenuItem(value: 2, child: Text('QoS 2')),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.outbox_outlined,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '发布消息',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const Spacer(),
+                      if (compact)
+                        IconButton(
+                          tooltip: '收起发布区',
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          onPressed: () =>
+                              setState(() => _composerExpanded = false),
+                        ),
                     ],
-                    onChanged: (v) => setState(() => _qos = v ?? 0),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildQuickCommandBar(),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTopicMenu(
+                          controller: _pubTopicCtrl,
+                          label: '发送主题',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      DropdownButton<int>(
+                        value: _qos,
+                        items: const [
+                          DropdownMenuItem(value: 0, child: Text('QoS 0')),
+                          DropdownMenuItem(value: 1, child: Text('QoS 1')),
+                          DropdownMenuItem(value: 2, child: Text('QoS 2')),
+                        ],
+                        onChanged: (v) => setState(() => _qos = v ?? 0),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SendComposer(
+                    controller: _payloadCtrl,
+                    variables: _vars,
+                    onSend: _handlePublish,
+                    labelText: '发送内容',
+                    hintText: '{"msg":"hello"}',
+                    minLines: compact ? 2 : 5,
+                    maxLines: compact ? 4 : 10,
+                    history: [
+                      for (final e in _service.history) e.command,
+                    ],
+                    sendLabel: '发布',
                   ),
                 ],
-              ),
-              const SizedBox(height: 8),
-              SendComposer(
+              )
+            : SendComposer(
                 controller: _payloadCtrl,
                 variables: _vars,
                 onSend: _handlePublish,
                 labelText: '发送内容',
                 hintText: '{"msg":"hello"}',
-                minLines: compact ? 2 : 5,
-                maxLines: compact ? 4 : 10,
-                history: _pubHistory,
+                collapsed: true,
+                onExpand: () => setState(() => _composerExpanded = true),
                 sendLabel: '发布',
               ),
-            ],
-          )
-        : SendComposer(
-            controller: _payloadCtrl,
-            variables: _vars,
-            onSend: _handlePublish,
-            labelText: '发送内容',
-            hintText: '{"msg":"hello"}',
-            collapsed: true,
-            onExpand: () => setState(() => _composerExpanded = true),
-            sendLabel: '发布',
-          );
+      ),
+    );
     if (embedded) return panel;
     return SafeArea(
       top: false,
@@ -1247,6 +1254,25 @@ class _ConfigPanelState extends State<_ConfigPanel> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            // 最近连接（持久化历史，可清空）
+            ListenableBuilder(
+              listenable: widget.service,
+              builder: (context, _) {
+                final conns = widget.service.connections;
+                return RecentConnectionsSection(
+                  labels: [for (final c in conns) c.label],
+                  onSelected: (i) {
+                    final c = conns[i];
+                    setState(() {
+                      _hostCtrl.text = c.host;
+                      _portCtrl.text = c.port.toString();
+                    });
+                  },
+                  onClear: widget.service.clearConnections,
+                );
+              },
             ),
             const SizedBox(height: 16),
             // 模板变量（可折叠快捷填写，与设置页联动）
