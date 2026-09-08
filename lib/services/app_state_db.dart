@@ -33,6 +33,8 @@ class AppStateDb {
   static const String mqttQuickCommandsKey = 'mqtt_quick_commands';
   static const String modbusQuickCommandsKey = 'modbus_quick_commands';
   static const String modbusConnectionsKey = 'modbus_connections';
+  static const String serialQuickCommandsKey = 'serial_quick_commands';
+  static const String serialHistoryKey = 'serial_history';
 
   static const String _fileName = 'app_state.db';
 

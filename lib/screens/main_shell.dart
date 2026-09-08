@@ -6,6 +6,7 @@ import '../services/modbus_service.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
 import '../services/quick_command_service.dart';
+import '../services/serial_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
@@ -13,6 +14,7 @@ import '../services/variables_service.dart';
 import 'home_screen.dart';
 import 'modbus_screen.dart';
 import 'mqtt_screen.dart';
+import 'serial_screen.dart';
 import 'settings_screen.dart';
 
 /// 主框架：底栏三页（TCP 工具 / MQTT 工具 / 设置）。
@@ -39,6 +41,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   final QuickCommandService _mqttQuickCommands = QuickCommandService.mqtt();
   final QuickCommandService _modbusQuickCommands = QuickCommandService.modbus();
   final ModbusTcpService _modbusService = ModbusTcpService();
+  final QuickCommandService _serialQuickCommands = QuickCommandService.serial();
+  final SerialService _serialService = SerialService();
   final VariablesService _vars = VariablesService();
   int _index = 0;
 
@@ -53,6 +57,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _brokerService.init(globalLog: _globalLog);
     _modbusService.init(globalLog: _globalLog);
     _modbusService.loadConnections();
+    _serialService.init(globalLog: _globalLog);
+    _serialService.loadHistory();
     _globalLog.load();
     AppSettingsService.instance.load();
     _tcpService.loadHistory();
@@ -62,6 +68,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _quickCommands.load();
     _mqttQuickCommands.load();
     _modbusQuickCommands.load();
+    _serialQuickCommands.load();
     _vars.load();
   }
 
@@ -73,10 +80,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _mqttService.dispose();
     _brokerService.dispose();
     _modbusService.dispose();
+    _serialService.dispose();
     _topicTemplates.dispose();
     _quickCommands.dispose();
     _mqttQuickCommands.dispose();
     _modbusQuickCommands.dispose();
+    _serialQuickCommands.dispose();
     _vars.dispose();
     super.dispose();
   }
@@ -104,6 +113,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         theme: _theme,
         variables: _vars,
       ),
+      SerialScreen(
+        service: _serialService,
+        quickCommands: _serialQuickCommands,
+        theme: _theme,
+        variables: _vars,
+      ),
       SettingsScreen(
         service: _tcpService,
         mqtt: _mqttService,
@@ -114,6 +129,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         quickCommands: _quickCommands,
         mqttQuickCommands: _mqttQuickCommands,
         modbusQuickCommands: _modbusQuickCommands,
+        serialQuickCommands: _serialQuickCommands,
       ),
     ];
     return LayoutBuilder(
@@ -171,6 +187,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                       label: Text('Modbus'),
                     ),
                     NavigationRailDestination(
+                      icon: Icon(Icons.settings_input_component_outlined),
+                      selectedIcon: Icon(Icons.settings_input_component),
+                      label: Text('串口'),
+                    ),
+                    NavigationRailDestination(
                       icon: Icon(Icons.tune_outlined),
                       selectedIcon: Icon(Icons.tune),
                       label: Text('设置'),
@@ -217,6 +238,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       icon: Icon(Icons.dns_outlined),
       selectedIcon: Icon(Icons.dns),
       label: 'Modbus',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.settings_input_component_outlined),
+      selectedIcon: Icon(Icons.settings_input_component),
+      label: '串口',
     ),
     NavigationDestination(
       icon: Icon(Icons.tune_outlined),

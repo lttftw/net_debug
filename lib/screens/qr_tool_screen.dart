@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -12,13 +13,15 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:zxing2/qrcode.dart';
 
 import '../widgets/app_toast.dart';
+import 'qr_scan_screen.dart';
 
 /// 二级页：文本与二维码互转工具。
 ///
-/// 纯 Dart 实现：
 /// - 生成：qr_flutter（qr 包）按输入文本实时生成二维码，可保存为 PNG；
-/// - 识别：file_picker 选图 → image 包解码 → zxing2 定位并解码二维码，
-///   解码在后台 isolate 执行避免卡顿。
+/// - 识别：两种入口。
+///   1. 扫一扫（仅 Android）：mobile_scanner 调起摄像头实时识别；
+///   2. 图片识别：file_picker 选图 → image 包解码 → zxing2 定位并解码二维码，
+///      解码在后台 isolate 执行避免卡顿。
 class QrToolScreen extends StatefulWidget {
   const QrToolScreen({super.key});
 
@@ -151,6 +154,22 @@ class _QrToolScreenState extends State<QrToolScreen> {
   }
 
   // ---------- 识别 ----------
+
+  /// 摄像头扫码仅 Android 提供（mobile_scanner 无 Windows 实现）
+  bool get _canScanCamera => !kIsWeb && Platform.isAndroid;
+
+  Future<void> _scanCamera() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (!mounted || result == null || result.isEmpty) return;
+    setState(() {
+      _decoding = false;
+      _decodeResult = result;
+      _decodeMessage = '识别成功';
+    });
+  }
 
   Future<void> _pickAndDecode() async {
     try {
@@ -355,14 +374,27 @@ class _QrToolScreenState extends State<QrToolScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              FilledButton.icon(
-                onPressed: _decoding ? null : _pickAndDecode,
-                icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: const Text('选择图片'),
-              ),
+              if (_canScanCamera) ...[
+                FilledButton.icon(
+                  onPressed: _scanCamera,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('扫一扫'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _decoding ? null : _pickAndDecode,
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('选择图片'),
+                ),
+              ] else
+                FilledButton.icon(
+                  onPressed: _decoding ? null : _pickAndDecode,
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('选择图片'),
+                ),
               const SizedBox(height: 8),
               Text(
-                '支持包含二维码的截图 / 照片（PNG、JPG 等）',
+                '支持调起摄像头实时识别，或选择包含二维码的截图 / 照片（PNG、JPG 等）',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

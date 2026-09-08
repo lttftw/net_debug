@@ -37,6 +37,11 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // 仅打包 arm64：其余 ABI（armeabi-v7a/x86_64）不再编入 APK，
+        // 原生库体积约降为原来的 1/3（arm64 覆盖 2016 年后的所有设备）
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {

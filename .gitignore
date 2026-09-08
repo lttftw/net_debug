@@ -61,3 +61,6 @@ app.*.map.json
 assets/docs/TCP_JSON_PROTOCOL.full.md
 assets/presets/quick_commands.full.json
 assets/variables/variables.full.json
+
+# Android 构建中间产物（lint 报告等，根 /build/ 之外的位置）
+android/build/

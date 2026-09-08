@@ -119,7 +119,9 @@ jobs:
           } > android/key.properties
 
       - name: Build release APK
-        run: flutter build apk --release
+        # APK 只打包 arm64（abiFilters 见 android/app/build.gradle.kts）；
+        # target-platform 让 Flutter 跳过其它 ABI 的 AOT 编译
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Stage APK
         shell: bash

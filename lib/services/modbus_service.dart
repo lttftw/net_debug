@@ -217,6 +217,8 @@ class ModbusTcpService extends ChangeNotifier {
       if (_pending == completer) {
         _pending = null;
         _pendingTid = null;
+        // 丢弃残缺的接收缓冲，避免迟到的半帧与下一响应拼接错位
+        _buffer = [];
         completer.completeError(TimeoutException('等待响应超时'));
       }
     });
@@ -342,11 +344,22 @@ class ModbusTcpService extends ChangeNotifier {
     if (frame.length < 9) {
       throw Exception('响应帧过短');
     }
+    final pid = (frame[2] << 8) | frame[3];
+    if (pid != 0) {
+      throw Exception('响应协议 ID 非法: $pid');
+    }
+    final unit = frame[6];
+    if (unit != cmd.unit) {
+      throw Exception('响应从站地址不匹配: 期望 ${cmd.unit}，收到 $unit');
+    }
     final pdu = Uint8List.sublistView(frame, 7);
     return _parsePdu(pdu, cmd);
   }
 
   ModbusResult _parsePdu(Uint8List pdu, ModbusCommand cmd) {
+    if (pdu.isEmpty) {
+      throw Exception('响应帧不完整');
+    }
     final fcByte = pdu[0];
     // 异常响应
     if ((fcByte & 0x80) != 0) {
@@ -359,11 +372,23 @@ class ModbusTcpService extends ChangeNotifier {
         dataText: '异常 ${_exceptionText(code)}',
       );
     }
+    if (fcByte != cmd.function.code) {
+      throw Exception(
+        '响应功能码不一致: 期望 0x${cmd.function.code.toRadixString(16).padLeft(2, '0')}，'
+        '收到 0x${fcByte.toRadixString(16).padLeft(2, '0')}',
+      );
+    }
 
     switch (cmd.function) {
       case ModbusFunction.readCoils:
       case ModbusFunction.readDiscreteInputs:
+        if (pdu.length < 2) {
+          throw Exception('响应帧不完整');
+        }
         final byteCount = pdu[1];
+        if (pdu.length < 2 + byteCount) {
+          throw Exception('响应帧不完整: 声明 $byteCount 字节，实际 ${pdu.length - 2}');
+        }
         final data = Uint8List.sublistView(pdu, 2, 2 + byteCount);
         final coils = _unpackCoils(data, cmd.count ?? 1);
         return ModbusResult(
@@ -375,7 +400,13 @@ class ModbusTcpService extends ChangeNotifier {
         );
       case ModbusFunction.readHoldingRegisters:
       case ModbusFunction.readInputRegisters:
+        if (pdu.length < 2) {
+          throw Exception('响应帧不完整');
+        }
         final byteCount = pdu[1];
+        if (pdu.length < 2 + byteCount) {
+          throw Exception('响应帧不完整: 声明 $byteCount 字节，实际 ${pdu.length - 2}');
+        }
         final data = Uint8List.sublistView(pdu, 2, 2 + byteCount);
         final regs = <int>[
           for (var i = 0; i + 1 < data.length; i += 2)
@@ -403,6 +434,9 @@ class ModbusTcpService extends ChangeNotifier {
   }
 
   List<bool> _unpackCoils(Uint8List data, int count) {
+    if (count > data.length * 8) {
+      throw Exception('响应数据不足: 期望 $count 位，实际 ${data.length * 8} 位');
+    }
     final out = <bool>[];
     for (var i = 0; i < count; i++) {
       final byte = data[i >> 3];

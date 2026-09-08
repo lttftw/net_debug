@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// 全局日志来源
-enum GlobalLogSource { tcp, mqtt, broker, modbus, app }
+enum GlobalLogSource { tcp, mqtt, broker, modbus, serial, app }
 
 /// 全局日志条目
 class GlobalLogEntry {
@@ -36,6 +36,8 @@ class GlobalLogEntry {
         return 'Broker';
       case GlobalLogSource.modbus:
         return 'Modbus';
+      case GlobalLogSource.serial:
+        return '串口';
       case GlobalLogSource.app:
         return '应用';
     }

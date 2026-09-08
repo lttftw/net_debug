@@ -306,6 +306,7 @@ class _SendComposerState extends State<SendComposer> {
       textDirection: TextDirection.ltr,
     )..layout();
     final width = measure.width + 2 + 16 + 12 + 2 + 4; // 文本+间距+箭头+内边距+边框+余量
+    measure.dispose();
     return MenuAnchor(
       menuChildren: [
         MenuItemButton(

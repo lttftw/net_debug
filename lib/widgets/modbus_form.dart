@@ -78,7 +78,8 @@ class ModbusFormState extends State<ModbusForm> {
 
   /// 校验并构造指令；非法时返回 null（已 toast 提示）。
   ModbusCommand? buildCommand() {
-    final unit = _parseInt(_unitCtrl.text, label: '从站地址', min: 0, max: 247) ?? 1;
+    final unit = _parseInt(_unitCtrl.text, label: '从站地址', min: 0, max: 247);
+    if (unit == null) return null;
     final addr = _parseInt(_addrCtrl.text, label: '起始地址', max: 0xFFFF);
     if (addr == null) return null;
 

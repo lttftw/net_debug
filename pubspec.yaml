@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.3
+version: 1.0.4
 
 environment:
   sdk: ^3.13.0
@@ -49,6 +49,10 @@ dependencies:
   qr_flutter: ^4.1.0
   zxing2: ^0.2.4
   image: ^4.9.2
+  # 扫码（仅 Android 端调用摄像头；Windows 端不加载其原生实现）
+  mobile_scanner: ^7.0.0
+  # 串口调试（Windows 端，封装 libserialport C 库）
+  flutter_libserialport: ^0.6.0
   package_info_plus: ^10.2.1
   url_launcher: ^6.3.2
 dev_dependencies:
@@ -59,6 +63,13 @@ dev_dependencies:
   qr: ^3.0.2
   flutter_lints: ^6.0.0
   win_plugin_link_repair: ^0.1.1
+
+# flutter_libserialport 官方包声明支持 Android，但其 android/build.gradle 调用
+# 已被 Gradle 9 移除的 jcenter()，会破坏 APK 构建。串口仅 Windows 端使用，
+# 故本地化到 third_party/ 并移除 Android 平台声明，使 Android 构建完全跳过它。
+dependency_overrides:
+  flutter_libserialport:
+    path: third_party/flutter_libserialport
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

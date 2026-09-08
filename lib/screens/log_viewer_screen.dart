@@ -27,6 +27,7 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
     GlobalLogSource.mqtt: 'MQTT',
     GlobalLogSource.broker: 'Broker',
     GlobalLogSource.modbus: 'Modbus',
+    GlobalLogSource.serial: '串口',
     GlobalLogSource.app: '应用',
   };
 
@@ -295,6 +296,8 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
         return Colors.orange;
       case GlobalLogSource.modbus:
         return Colors.brown;
+      case GlobalLogSource.serial:
+        return Colors.blueGrey;
       case GlobalLogSource.app:
         return Colors.grey;
     }
