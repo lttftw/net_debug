@@ -161,21 +161,21 @@ idle ─────────────────────────
 
 | `reason` | 含义 |
 |---|---|
-| `no_link` | 设备未联网，URL 下载无法开始（恢复在线后重新 `ota_apply` 即可重试） |
-| `connect` | 连接 HTTP 服务器失败 |
-| `http_status` | 服务器返回非 2xx |
-| `no_length` | 响应没有可用长度（无 Content-Length 或 chunked） |
-| `no_range` | 续传时服务器不支持 Range（未回 `206`） |
+| `device_not_connected` | 设备未联网，URL 下载无法开始（恢复在线后重新 `ota_apply` 即可重试） |
+| `server_connect_failed` | 连接 HTTP 服务器失败 |
+| `server_status_error` | 服务器返回非 2xx |
+| `no_content_length` | 响应没有可用长度（无 Content-Length 或 chunked） |
+| `range_not_supported` | 续传时服务器不支持 Range（未回 `206`） |
 | `range_mismatch` | 续传响应的范围与请求偏移不一致 |
-| `short_read` | 本次读取短于 Content-Length |
-| `too_large` | 镜像超过被动分区容量 |
-| `busy` | 已有其它 OTA 会话占用 |
-| `conn_lost` | 连接中断且续传次数用尽 |
-| `incomplete` | 未写满声明长度就请求校验 |
-| `flash_error` | 写入 flash 失败 |
-| `validate_failed` | 镜像校验失败（含**签名无效**或内容损坏） |
-| `idle_timeout` | 连续 120 s 没有成功写入分片 |
-| `pending_verify` / `partition_conflict` / `no_mem` | 准备阶段失败：运行镜像自检未确认 / 目标分区与运行分区冲突 / 内存不足 |
+| `download_short_read` | 本次读取短于 Content-Length |
+| `image_too_large` | 镜像超过被动分区容量 |
+| `session_busy` | 已有其它 OTA 会话占用 |
+| `connection_lost` | 连接中断且续传次数用尽 |
+| `flash_write_error` | 写入 flash 失败 |
+| `download_write_failed` | 下载过程中写入镜像失败 |
+| `image_validate_failed` | 镜像校验失败（含**签名无效**或内容损坏） |
+| `download_idle_timeout` | 连续 120 s 没有成功写入分片 |
+| `image_pending_verify` / `partition_conflict` / `out_of_memory` | 准备阶段失败：运行镜像自检未确认 / 目标分区与运行分区冲突 / 内存不足 |
 
 ## 7. 错误响应
 
