@@ -75,18 +75,20 @@ Android 正式发布使用仓库 Actions Secrets 中的
 
 ## 内置数据资源
 
-指令模板与协议文档已从代码解耦为独立资源文件，采用「完整版优先、缺失回退示范版」的加载机制：
+指令模板与协议文档已从代码解耦为独立资源文件，采用「完整版优先、缺失回退公开示范版」的加载机制：
 
-| 资源 | 公开版（随仓库发布） | 完整版（本地可选，git 忽略） |
+| 资源 | 公开示范版 | 完整版（本地可选） |
 | --- | --- | --- |
-| 指令模板 | `assets/presets/quick_commands.json`（示范） | `assets/presets/quick_commands.full.json` |
-| 模板变量 | `assets/variables/variables.json`（示范） | `assets/variables/variables.full.json` |
-| 协议文档 | `assets/docs/TCP_JSON_PROTOCOL.md`（示范） | `assets/docs/TCP_JSON_PROTOCOL.full.md` |
+| 协议文档 | `assets/docs/TCP_JSON_PROTOCOL.md`、`MQTT_PROTOCOL.md`、`MODBUS_TCP_PROTOCOL.md` | 同名的 `*.full.md` |
+| 指令模板 | `assets/presets/tcp_commands.json`、`mqtt_commands.json`、`modbus_commands.json`、`serial_commands.json`、`topic_templates.json` | 同名的 `*.full.json` |
+| 模板变量 | `assets/variables/variables.json` | `variables.full.json` |
 
-- 应用启动时**先尝试加载完整版资源，不存在则回退公开版示范资源**，因此
+- 应用启动时**先尝试加载完整版资源，不存在则回退公开示范资源**，因此
   无论是否提供完整版文件，构建与运行都正常
-- 公开仓库仅发布公开版示范文件；完整版文件放在同目录下即可自动启用
-  （已在 `.gitignore` 中忽略，不会被提交）
+- 完整版文件放在同目录下即可自动启用（`TCP_JSON_PROTOCOL.full.md`、
+  `tcp_commands.full.json`、`variables.full.json` 已在 `.gitignore` 中忽略，不会被提交）
+- 应用内「协议文档」页展示 **TCP / MQTT / Modbus** 三份通信文档（顶栏切换）；
+  设置页的「OTA 固件升级扩展」另附 `assets/docs/OTA_PROTOCOL.md`（升级功能使用说明）
 
 ## 目录结构
 
@@ -94,7 +96,7 @@ Android 正式发布使用仓库 Actions Secrets 中的
 lib/
 ├── main.dart                       # 入口
 ├── models/
-│   └── command_preset.dart         # 快捷指令模型 + JSON 预设加载（完整版优先/回退示范）
+│   └── command_preset.dart         # 指令预设模型 + JSON 预设加载（完整版优先/回退示范）
 ├── services/
 │   ├── tcp_service.dart            # TCP 连接、按行解析、日志与历史
 │   ├── mqtt_service.dart           # MQTT 客户端（连接/订阅/发布/日志/配置）
@@ -106,7 +108,7 @@ lib/
     ├── home_screen.dart            # TCP 工具页
     ├── mqtt_screen.dart            # MQTT 工具页
     ├── settings_screen.dart        # 设置页
-    ├── quick_commands_screen.dart  # 二级页：快捷指令管理
+    ├── command_presets_screen.dart # 二级页：指令预设（快捷指令）管理
     ├── history_screen.dart         # 二级页：历史清理
     ├── theme_screen.dart           # 二级页：主题外观
     ├── variables_screen.dart       # 二级页：模板变量管理
