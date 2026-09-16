@@ -5,7 +5,7 @@ import '../models/message_display_style.dart';
 import '../models/topic_template.dart';
 import '../services/mqtt_broker_service.dart';
 import '../services/mqtt_service.dart';
-import '../services/quick_command_service.dart';
+import '../services/command_preset_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
@@ -14,7 +14,7 @@ import '../widgets/log_line_view.dart';
 import '../widgets/recent_connections_section.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
-import 'quick_commands_screen.dart';
+import 'command_presets_screen.dart';
 import 'variables_screen.dart';
 
 /// MQTT 工具页：独立的 MQTT 调试客户端，与 TCP 工具完全解耦。
@@ -32,7 +32,7 @@ class MqttScreen extends StatefulWidget {
   final ThemeService theme;
 
   /// MQTT 快捷指令（设备 MQTT 白名单子集，结构与 TCP 快捷指令一致）
-  final QuickCommandService quickCommands;
+  final CommandPresetService quickCommands;
 
   const MqttScreen({
     super.key,
@@ -61,7 +61,7 @@ class _MqttScreenState extends State<MqttScreen> {
   VariablesService get _vars => widget.variables;
   ThemeService get _theme => widget.theme;
   TopicTemplateService get _topics => widget.topics;
-  QuickCommandService get _qcs => widget.quickCommands;
+  CommandPresetService get _qcs => widget.quickCommands;
 
   @override
   void initState() {
@@ -672,7 +672,7 @@ class _MqttScreenState extends State<MqttScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => QuickCommandsScreen(
+        builder: (_) => CommandPresetsScreen(
           service: _qcs,
           variables: _vars,
           title: 'MQTT 快捷指令',

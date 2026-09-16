@@ -5,45 +5,46 @@ import 'package:flutter/foundation.dart';
 import '../models/command_preset.dart';
 import 'app_state_db.dart';
 
-/// 快捷指令统一管理服务（按「组」组织，样式与主题模板一致）。
+/// 指令预设统一管理服务（按「组」组织，样式与主题模板一致）。
 ///
+/// 四个通道各持一个实例（TCP / MQTT / Modbus / 串口），彼此独立。
 /// 数据分层：
 /// - 首次启动把预设指令组（个人完整版 > 内置完整版 > 示例）写入统一
-///   sqlite 运行时存储（[AppStateDb]，默认 `quick_commands`；MQTT 实例
-///   使用独立 `mqtt_quick_commands` key 与更小的白名单子集预设）；
+///   sqlite 运行时存储（[AppStateDb]，TCP 默认 `tcp_commands`；MQTT 实例
+///   使用独立 `mqtt_commands` key 与更小的白名单子集预设）；
 /// - 之后用户可像主题模板一样新建/重命名/删除组、拖拽排序，并增删改
 ///   组内指令，全部运行时修改存 sqlite，程序更新/版本覆盖不影响；
 /// - 「恢复默认」从预设整树重建（用户显式操作）。
-class QuickCommandService extends ChangeNotifier {
+class CommandPresetService extends ChangeNotifier {
   final List<CommandPresetGroup> _groups = [];
 
-  /// 运行时数据在 [AppStateDb] 中的 key（TCP/MQTT 各自独立）
+  /// 运行时数据在 [AppStateDb] 中的 key（TCP/MQTT/Modbus/串口各自独立）
   final String storageKey;
 
-  /// 预设源加载器（TCP 完整指令集 / MQTT 白名单子集）
+  /// 预设源加载器（TCP 完整指令集 / MQTT 白名单子集 / Modbus 功能码 / 串口帧）
   final Future<List<CommandPresetGroup>> Function() presetLoader;
 
-  QuickCommandService({
+  CommandPresetService({
     String? storageKey,
     Future<List<CommandPresetGroup>> Function()? presetLoader,
-  })  : storageKey = storageKey ?? AppStateDb.quickCommandsKey,
-        presetLoader = presetLoader ?? loadCommandPresetGroups;
+  })  : storageKey = storageKey ?? AppStateDb.tcpCommandsKey,
+        presetLoader = presetLoader ?? loadTcpCommandPresetGroups;
 
   /// MQTT 快捷指令实例：独立运行时存储与更小的协议白名单预设
-  factory QuickCommandService.mqtt() => QuickCommandService(
-    storageKey: AppStateDb.mqttQuickCommandsKey,
+  factory CommandPresetService.mqtt() => CommandPresetService(
+    storageKey: AppStateDb.mqttCommandsKey,
     presetLoader: loadMqttCommandPresetGroups,
   );
 
   /// Modbus 快捷指令实例：独立运行时存储与 Modbus 功能码预设
-  factory QuickCommandService.modbus() => QuickCommandService(
-    storageKey: AppStateDb.modbusQuickCommandsKey,
+  factory CommandPresetService.modbus() => CommandPresetService(
+    storageKey: AppStateDb.modbusCommandsKey,
     presetLoader: loadModbusCommandPresetGroups,
   );
 
   /// 串口快捷指令实例：独立运行时存储与 AT/HEX 帧预设
-  factory QuickCommandService.serial() => QuickCommandService(
-    storageKey: AppStateDb.serialQuickCommandsKey,
+  factory CommandPresetService.serial() => CommandPresetService(
+    storageKey: AppStateDb.serialCommandsKey,
     presetLoader: loadSerialCommandPresetGroups,
   );
 

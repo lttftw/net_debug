@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import '../models/command_preset.dart';
 import '../models/modbus_command.dart';
 import '../services/modbus_service.dart';
-import '../services/quick_command_service.dart';
+import '../services/command_preset_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/modbus_form.dart';
 import '../widgets/recent_connections_section.dart';
-import 'quick_commands_screen.dart';
+import 'command_presets_screen.dart';
 
 /// Modbus TCP 主站调试页：连接栏 + 快捷指令 + 指令表单 + 日志/解析区。
 class ModbusScreen extends StatefulWidget {
   final ModbusTcpService service;
-  final QuickCommandService quickCommands;
+  final CommandPresetService quickCommands;
   final ThemeService theme;
   final VariablesService variables;
 
@@ -40,7 +40,7 @@ class _ModbusScreenState extends State<ModbusScreen> {
   bool _connectionInitialized = false;
 
   ModbusTcpService get _service => widget.service;
-  QuickCommandService get _qcs => widget.quickCommands;
+  CommandPresetService get _qcs => widget.quickCommands;
   ThemeService get _theme => widget.theme;
 
   @override
@@ -143,7 +143,7 @@ class _ModbusScreenState extends State<ModbusScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => QuickCommandsScreen(
+        builder: (_) => CommandPresetsScreen(
           service: _qcs,
           variables: widget.variables,
           title: 'Modbus 快捷指令',

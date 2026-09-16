@@ -10,14 +10,21 @@ import '../widgets/app_toast.dart';
 
 /// 二级页：内嵌指令协议文档（Markdown 渲染，带悬浮目录）。
 ///
+/// 两种模式：
+/// - 多文档模式（未传 [assetPath]）：展示内置的 TCP / MQTT / Modbus
+///   三份协议文档，顶栏提供切换按键（PopupMenu）在几份文档间切换；
+/// - 单文档模式（传入 [assetPath]，如 OTA 文档入口）：只加载指定文档，
+///   不显示切换按键。
+///
 /// 加载机制（懒加载）：
-/// - 内容进程内缓存：首次打开时从 assets 读取并切分为章节，之后复用；
+/// - 内容进程内缓存：按文档键控，首次打开时从 assets 读取并切分为章节，
+///   之后复用；
 /// - 章节懒渲染：ListView.builder 只构建视口附近的章节，
 ///   长文档打开不再整页一次性渲染；
 /// - 目录跳转：目标章节已构建则直接滚到精确偏移；未构建则按已测
 ///   章节的平均高度估算位置快速跳转，随后帧间修正到精确位置。
 class ProtocolDocsScreen extends StatefulWidget {
-  /// 自定义文档资产路径；为 null 时使用内置 TCP 协议文档
+  /// 自定义文档资产路径；为 null 时使用内置多文档模式（TCP/MQTT/Modbus）
   final String? assetPath;
 
   /// 页面标题
@@ -50,6 +57,15 @@ class _DocCache {
   const _DocCache(this.sections);
 }
 
+/// 一份可切换文档的资产配置：完整版优先、公开版示范回退
+class _DocEntry {
+  final String label;
+  final String fullAsset;
+  final String publicAsset;
+
+  const _DocEntry(this.label, this.fullAsset, this.publicAsset);
+}
+
 /// 分节的页面级运行时视图。
 /// GlobalKey 与测量出的偏移属于当前页面实例，不能跨实例复用。
 class _SectionView {
@@ -64,11 +80,24 @@ class _SectionView {
 }
 
 class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
-  /// 完整版文档（本地可选，未随公开仓库发布）
-  static const _fullAsset = 'assets/docs/TCP_JSON_PROTOCOL_full.md';
-
-  /// 公开版示范文档（随仓库发布）
-  static const _publicAsset = 'assets/docs/TCP_JSON_PROTOCOL.md';
+  /// 内置多文档清单：TCP / MQTT / Modbus（完整版优先，公开示范版回退）
+  static const _builtinDocs = <_DocEntry>[
+    _DocEntry(
+      'TCP',
+      'assets/docs/TCP_JSON_PROTOCOL.full.md',
+      'assets/docs/TCP_JSON_PROTOCOL.md',
+    ),
+    _DocEntry(
+      'MQTT',
+      'assets/docs/MQTT_PROTOCOL.full.md',
+      'assets/docs/MQTT_PROTOCOL.md',
+    ),
+    _DocEntry(
+      'Modbus',
+      'assets/docs/MODBUS_TCP_PROTOCOL.full.md',
+      'assets/docs/MODBUS_TCP_PROTOCOL.md',
+    ),
+  ];
 
   /// 宽度达到该值时显示常驻侧边目录，否则使用悬浮按钮 + 弹层目录
   static const _tocBreakpoint = 900.0;
@@ -84,7 +113,13 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
   /// 进程内缓存：按资产路径键控，内容加载 + 章节切分每份文档只执行一次
   static final Map<String, Future<_DocCache>> _cacheFutures = {};
 
-  late final Future<_DocCache> _future = _load();
+  /// 是否为多文档模式（未显式指定 assetPath）
+  bool get _multiDoc => widget.assetPath == null;
+
+  /// 当前文档索引（多文档模式）
+  int _docIndex = 0;
+
+  late Future<_DocCache> _future = _load();
   final ScrollController _scrollController = ScrollController();
 
   List<_SectionView> _sections = const [];
@@ -124,32 +159,64 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
   // ---------- 加载与切分 ----------
 
   Future<_DocCache> _load() {
-    final key = widget.assetPath ?? _fullAsset;
+    // 缓存键统一用「当前要加载的文档」
+    final key = _currentAsset;
     return _cacheFutures.putIfAbsent(key, () => _loadAndSplit(key));
   }
 
-  /// 显式指定的文档直接加载，加载失败时给出错误章节；
-  /// 内置 TCP 文档优先尝试完整版，缺失时回退公开版示范文档
+  /// 当前要加载的资产路径：
+  /// - 单文档模式：显式指定的资产；
+  /// - 多文档模式：当前条目的完整版资产（缺失时在 _loadAndSplit 内回退公开版）
+  String get _currentAsset =>
+      widget.assetPath ?? _builtinDocs[_docIndex].fullAsset;
+
+  /// 加载并切分一份文档。
+  ///
+  /// 内置多文档模式按「完整版优先、公开版示范回退」顺序尝试；
+  /// 显式指定的单文档（如 OTA）直接加载，失败时给出错误章节。
   static Future<_DocCache> _loadAndSplit(String asset) async {
-    if (asset != _fullAsset) {
-      try {
-        return _splitSections(await rootBundle.loadString(asset));
-      } catch (_) {
-        return const _DocCache([
-          _DocSection(level: null, title: '', text: '文档加载失败'),
-        ]);
+    // 完整版资产是否属于内置清单（决定是否需要公开版回退）
+    _DocEntry? entry;
+    for (final e in _builtinDocs) {
+      if (e.fullAsset == asset) {
+        entry = e;
+        break;
       }
     }
-    for (final a in [_fullAsset, _publicAsset]) {
-      try {
-        return _splitSections(await rootBundle.loadString(a));
-      } catch (_) {
-        // 尝试下一个资源
+    if (entry != null) {
+      for (final a in [entry.fullAsset, entry.publicAsset]) {
+        try {
+          return _splitSections(await rootBundle.loadString(a));
+        } catch (_) {
+          // 尝试下一个资源
+        }
       }
+      return const _DocCache([
+        _DocSection(level: null, title: '', text: '文档加载失败'),
+      ]);
     }
-    return const _DocCache([
-      _DocSection(level: null, title: '', text: '文档加载失败'),
-    ]);
+    try {
+      return _splitSections(await rootBundle.loadString(asset));
+    } catch (_) {
+      return const _DocCache([
+        _DocSection(level: null, title: '', text: '文档加载失败'),
+      ]);
+    }
+  }
+
+  /// 多文档模式下切换当前文档：重建加载 Future 并重置分节/滚动状态。
+  void _switchDoc(int index) {
+    if (index < 0 || index >= _builtinDocs.length || index == _docIndex) return;
+    setState(() {
+      _docIndex = index;
+      _future = _load();
+      _sections = const [];
+      _toc = const [];
+      _ready = false;
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
   }
 
   /// 按标题行（h1~h4）切分文档；代码围栏内的 `#` 不视为标题。
@@ -326,8 +393,41 @@ class _ProtocolDocsScreenState extends State<ProtocolDocsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final multi = _multiDoc;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(
+        title: Text(
+          multi ? '${widget.title} · ${_builtinDocs[_docIndex].label}' : widget.title,
+        ),
+        actions: [
+          if (multi)
+            PopupMenuButton<int>(
+              tooltip: '切换文档',
+              icon: const Icon(Icons.swap_horiz),
+              initialValue: _docIndex,
+              onSelected: _switchDoc,
+              itemBuilder: (context) => [
+                for (var i = 0; i < _builtinDocs.length; i++)
+                  PopupMenuItem<int>(
+                    value: i,
+                    child: Row(
+                      children: [
+                        Icon(
+                          i == _docIndex ? Icons.check : Icons.code,
+                          size: 18,
+                          color: i == _docIndex
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(_builtinDocs[i].label),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
       body: FutureBuilder<_DocCache>(
         future: _future,
         builder: (context, snapshot) {

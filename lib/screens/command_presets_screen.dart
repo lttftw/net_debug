@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../models/command_preset.dart';
-import '../services/quick_command_service.dart';
+import '../services/command_preset_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/restore_confirm.dart';
 import '../widgets/variable_text_field.dart';
 
-/// 二级页：快捷指令分组管理（TCP 工具）。
+/// 二级页：指令预设分组管理（TCP / MQTT / Modbus / 串口共用，标题由调用方指定）。
 /// 指令按「组」组织，可新建/重命名/删除组、调整组顺序；
 /// 组内指令可增删改并拖拽排序，运行时配置存 sqlite。
-class QuickCommandsScreen extends StatefulWidget {
-  final QuickCommandService service;
+class CommandPresetsScreen extends StatefulWidget {
+  final CommandPresetService service;
   final VariablesService variables;
   final String title;
 
-  const QuickCommandsScreen({
+  const CommandPresetsScreen({
     super.key,
     required this.service,
     required this.variables,
@@ -23,11 +23,11 @@ class QuickCommandsScreen extends StatefulWidget {
   });
 
   @override
-  State<QuickCommandsScreen> createState() => _QuickCommandsScreenState();
+  State<CommandPresetsScreen> createState() => _CommandPresetsScreenState();
 }
 
-class _QuickCommandsScreenState extends State<QuickCommandsScreen> {
-  QuickCommandService get _service => widget.service;
+class _CommandPresetsScreenState extends State<CommandPresetsScreen> {
+  CommandPresetService get _service => widget.service;
 
   @override
   Widget build(BuildContext context) {

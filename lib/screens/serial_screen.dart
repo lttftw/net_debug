@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_libserialport/flutter_libserialport.dart';
 
 import '../models/command_preset.dart';
-import '../services/quick_command_service.dart';
+import '../services/command_preset_service.dart';
 import '../services/serial_service.dart';
 import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
 import '../widgets/send_composer.dart';
-import 'quick_commands_screen.dart';
+import 'command_presets_screen.dart';
 
 /// 串口调试页（Windows）：端口/参数配置 + 收发日志 + 发送区。
 ///
@@ -20,7 +20,7 @@ import 'quick_commands_screen.dart';
 /// 双模式切换显示（切换对历史条目即时生效）。
 class SerialScreen extends StatefulWidget {
   final SerialService service;
-  final QuickCommandService quickCommands;
+  final CommandPresetService quickCommands;
   final ThemeService theme;
   final VariablesService variables;
 
@@ -61,7 +61,7 @@ class _SerialScreenState extends State<SerialScreen> {
   bool _composerExpanded = false;
 
   SerialService get _service => widget.service;
-  QuickCommandService get _qcs => widget.quickCommands;
+  CommandPresetService get _qcs => widget.quickCommands;
   ThemeService get _theme => widget.theme;
 
   @override
@@ -152,7 +152,7 @@ class _SerialScreenState extends State<SerialScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => QuickCommandsScreen(
+        builder: (_) => CommandPresetsScreen(
           service: _qcs,
           variables: widget.variables,
           title: '串口快捷指令',

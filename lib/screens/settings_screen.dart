@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/global_log_service.dart';
 import '../services/mqtt_service.dart';
-import '../services/quick_command_service.dart';
+import '../services/command_preset_service.dart';
 import '../services/tcp_service.dart';
 import '../services/theme_service.dart';
 import '../services/topic_template_service.dart';
@@ -11,7 +11,7 @@ import 'about_screen.dart';
 import 'history_screen.dart';
 import 'log_viewer_screen.dart';
 import 'protocol_docs_screen.dart';
-import 'quick_commands_screen.dart';
+import 'command_presets_screen.dart';
 import 'theme_screen.dart';
 import 'tools_screen.dart';
 import 'topic_template_screen.dart';
@@ -25,10 +25,10 @@ class SettingsScreen extends StatefulWidget {
   final ThemeService theme;
   final GlobalLogService globalLog;
   final TopicTemplateService topics;
-  final QuickCommandService quickCommands;
-  final QuickCommandService mqttQuickCommands;
-  final QuickCommandService modbusQuickCommands;
-  final QuickCommandService serialQuickCommands;
+  final CommandPresetService quickCommands;
+  final CommandPresetService mqttQuickCommands;
+  final CommandPresetService modbusQuickCommands;
+  final CommandPresetService serialQuickCommands;
 
   const SettingsScreen({
     super.key,
@@ -58,10 +58,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ThemeService get _theme => widget.theme;
   GlobalLogService get _globalLog => widget.globalLog;
   TopicTemplateService get _topics => widget.topics;
-  QuickCommandService get _qcs => widget.quickCommands;
-  QuickCommandService get _mqttQcs => widget.mqttQuickCommands;
-  QuickCommandService get _modbusQcs => widget.modbusQuickCommands;
-  QuickCommandService get _serialQcs => widget.serialQuickCommands;
+  CommandPresetService get _qcs => widget.quickCommands;
+  CommandPresetService get _mqttQcs => widget.mqttQuickCommands;
+  CommandPresetService get _modbusQcs => widget.modbusQuickCommands;
+  CommandPresetService get _serialQcs => widget.serialQuickCommands;
 
   /// 全部主题模板总数
   int get _totalTemplateCount =>
@@ -106,7 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle:
               '${_qcs.groups.length} 组 · ${_qcs.totalCount} 条可用指令',
           onTap: () =>
-              _open(QuickCommandsScreen(service: _qcs, variables: _vars)),
+              _open(CommandPresetsScreen(service: _qcs, variables: _vars)),
         ),
         _entryTile(
           icon: Icons.history,
@@ -171,7 +171,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '快捷指令',
           subtitle:
               '${_mqttQcs.groups.length} 组 · ${_mqttQcs.totalCount} 条可用指令',
-          onTap: () => _open(QuickCommandsScreen(
+          onTap: () => _open(CommandPresetsScreen(
               service: _mqttQcs, variables: _vars, title: 'MQTT 快捷指令')),
         ),
         _entryTile(
@@ -214,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '快捷指令',
           subtitle:
               '${_modbusQcs.groups.length} 组 · ${_modbusQcs.totalCount} 条可用指令',
-          onTap: () => _open(QuickCommandsScreen(
+          onTap: () => _open(CommandPresetsScreen(
               service: _modbusQcs, variables: _vars, title: 'Modbus 快捷指令')),
         ),
       ]),
@@ -224,7 +224,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: '快捷指令',
           subtitle:
               '${_serialQcs.groups.length} 组 · ${_serialQcs.totalCount} 条可用指令',
-          onTap: () => _open(QuickCommandsScreen(
+          onTap: () => _open(CommandPresetsScreen(
               service: _serialQcs, variables: _vars, title: '串口快捷指令')),
         ),
       ]),
@@ -246,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _entryTile(
           icon: Icons.menu_book_outlined,
           title: '指令协议文档',
-          subtitle: '查看内置协议文档',
+          subtitle: 'TCP / MQTT / Modbus 协议文档，顶栏可切换',
           onTap: () => _open(const ProtocolDocsScreen()),
         ),
         _entryTile(

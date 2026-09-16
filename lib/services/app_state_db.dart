@@ -29,11 +29,11 @@ class AppStateDb {
   static const String mqttHistoryKey = 'mqtt_history';
   static const String mqttInstallationIdKey = 'mqtt_installation_id';
   static const String topicTemplatesKey = 'topic_templates';
-  static const String quickCommandsKey = 'quick_commands';
-  static const String mqttQuickCommandsKey = 'mqtt_quick_commands';
-  static const String modbusQuickCommandsKey = 'modbus_quick_commands';
+  static const String tcpCommandsKey = 'tcp_commands';
+  static const String mqttCommandsKey = 'mqtt_commands';
+  static const String modbusCommandsKey = 'modbus_commands';
   static const String modbusConnectionsKey = 'modbus_connections';
-  static const String serialQuickCommandsKey = 'serial_quick_commands';
+  static const String serialCommandsKey = 'serial_commands';
   static const String serialHistoryKey = 'serial_history';
 
   static const String _fileName = 'app_state.db';

@@ -54,11 +54,11 @@ class CommandPresetGroup {
       };
 }
 
-/// 完整版指令模板（本地可选，未随公开仓库发布）
-const String kPresetsAssetFull = 'assets/presets/quick_commands.full.json';
+/// 完整版 TCP 指令模板（本地可选，未随公开仓库发布）
+const String kTcpPresetsAssetFull = 'assets/presets/tcp_commands.full.json';
 
-/// 公开版示范模板（随仓库发布）
-const String kPresetsAssetPublic = 'assets/presets/quick_commands.json';
+/// 公开版 TCP 示范模板（随仓库发布）
+const String kTcpPresetsAssetPublic = 'assets/presets/tcp_commands.json';
 
 /// 完整版 MQTT 快捷指令（协议白名单子集）
 const String kMqttPresetsAssetFull = 'assets/presets/mqtt_commands.full.json';
@@ -100,13 +100,13 @@ List<CommandPresetGroup> _parsePresetGroups(String raw) {
   ];
 }
 
-/// 加载指令预设组。
+/// 加载 TCP 指令预设组（本地 TCP 8080 的完整指令集）。
 ///
 /// 模板来源唯一：**内嵌 assets**（随程序安装包发布）。完整版资源优先，
 /// 公开示例仅作缺失回退；不做任何程序目录外部文件的读取或物化。
 /// 指令中的 `$(变量名)` 占位符（如 $(wifi_ssid)）在发送时由「模板变量」替换。
-Future<List<CommandPresetGroup>> loadCommandPresetGroups() =>
-    _loadCommandPresetGroups(kPresetsAssetFull, kPresetsAssetPublic);
+Future<List<CommandPresetGroup>> loadTcpCommandPresetGroups() =>
+    _loadCommandPresetGroups(kTcpPresetsAssetFull, kTcpPresetsAssetPublic);
 
 /// 加载 MQTT 快捷指令组（协议 MQTT 白名单子集，指令数比 TCP 少）。
 /// 同样只从内嵌 assets 读取：完整版优先、公开示例回退。

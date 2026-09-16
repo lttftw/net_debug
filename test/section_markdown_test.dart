@@ -32,57 +32,68 @@ class _FakePreBuilder extends MarkdownElementBuilder {
 
 void main() {
   testWidgets('各章节独立渲染不抛 _inlines 断言（懒加载回归）', (tester) async {
-    // 完整版本地可选，缺失时回退公开版示范文档
-    final full = File('assets/docs/TCP_JSON_PROTOCOL.full.md');
-    final file = full.existsSync()
-        ? full
-        : File('assets/docs/TCP_JSON_PROTOCOL.md');
-    final raw = file
-        .readAsStringSync()
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n');
+    // 内置协议文档：完整版优先，缺失时回退公开版示范文档
+    // OTA 只有单份文档（OTA_PROTOCOL.md），走同一条回退路径
+    const docs = <String, String>{
+      'TCP': 'TCP_JSON_PROTOCOL',
+      'MQTT': 'MQTT_PROTOCOL',
+      'Modbus': 'MODBUS_TCP_PROTOCOL',
+      'OTA': 'OTA_PROTOCOL',
+    };
 
-    final sections = <String>[];
-    final buf = <String>[];
-    var inFence = false;
-    for (final line in const LineSplitter().convert(raw)) {
-      if (line.trimLeft().startsWith('```')) {
-        inFence = !inFence;
+    for (final entry in docs.entries) {
+      final full = File('assets/docs/${entry.value}.full.md');
+      final file = full.existsSync()
+          ? full
+          : File('assets/docs/${entry.value}.md');
+      final raw = file
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n')
+          .replaceAll('\r', '\n');
+
+      final sections = <String>[];
+      final buf = <String>[];
+      var inFence = false;
+      for (final line in const LineSplitter().convert(raw)) {
+        if (line.trimLeft().startsWith('```')) {
+          inFence = !inFence;
+          buf.add(line);
+          continue;
+        }
+        final m = inFence ? null : headingRe.firstMatch(line);
+        if (m != null) {
+          if (buf.isNotEmpty) sections.add(buf.join('\n'));
+          buf.clear();
+        }
         buf.add(line);
-        continue;
       }
-      final m = inFence ? null : headingRe.firstMatch(line);
-      if (m != null) {
-        if (buf.isNotEmpty) sections.add(buf.join('\n'));
-        buf.clear();
-      }
-      buf.add(line);
-    }
-    if (buf.isNotEmpty) sections.add(buf.join('\n'));
+      if (buf.isNotEmpty) sections.add(buf.join('\n'));
 
-    final failures = <int>[];
-    for (var i = 0; i < sections.length; i++) {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: MarkdownBody(
-            data: sections[i],
-            selectable: true,
-            builders: {'pre': _FakePreBuilder()},
+      final failures = <int>[];
+      for (var i = 0; i < sections.length; i++) {
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: MarkdownBody(
+              data: sections[i],
+              selectable: true,
+              builders: {'pre': _FakePreBuilder()},
+            ),
           ),
-        ),
-      ));
-      await tester.pump();
-      final e = tester.takeException();
-      // 布局溢出是固定测试窗口的渲染警告（真实页面可滚动），不算失败
-      final isOverflow = e is FlutterError &&
-          e.diagnostics.any((d) => d.toString().contains('overflowed'));
-      if (e != null && !isOverflow) {
-        failures.add(i);
-        final first = sections[i].split('\n').first;
-        // ignore: avoid_print
-        print('失败章节 $i: $first\n  异常: $e');
+        ));
+        await tester.pump();
+        final e = tester.takeException();
+        // 布局溢出是固定测试窗口的渲染警告（真实页面可滚动），不算失败
+        final isOverflow = e is FlutterError &&
+            e.diagnostics.any((d) => d.toString().contains('overflowed'));
+        if (e != null && !isOverflow) {
+          failures.add(i);
+          final first = sections[i].split('\n').first;
+          // ignore: avoid_print
+          print('${entry.key} 失败章节 $i: $first\n  异常: $e');
+        }
       }
+      expect(failures, isEmpty,
+          reason: '${entry.key}: 共 ${failures.length} 个章节渲染失败');
     }
-    expect(failures, isEmpty, reason: '共 ${failures.length} 个章节渲染失败');
   });
 }

@@ -157,6 +157,8 @@ class TcpService extends ChangeNotifier {
             time TEXT NOT NULL
           )
         ''');
+        // 旧版快捷指令表：仅保留建表以兼容旧库，指令预设现已存于 AppStateDb
+        // 的 `tcp_commands` key，本表不再读写。
         await db.execute('''
           CREATE TABLE quick_commands (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,6 +180,7 @@ class TcpService extends ChangeNotifier {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
+          // 同上：旧版快捷指令表，勿删以免旧库版本比对失配。
           await db.execute('''
             CREATE TABLE quick_commands (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -505,17 +508,27 @@ class TcpService extends ChangeNotifier {
 
   // ---------- OTA ----------
 
-  /// 查询 OTA 状态
+  /// 查询 OTA 状态（`{"ota_get":true}`，无副作用，可随时轮询进度）
   Future<Map<String, dynamic>> otaStatus() async {
     return sendCommand(
-      jsonEncode({
-        'ota': {'op': 'status'},
-      }),
+      jsonEncode({'ota_get': true}),
       recordHistory: false,
     );
   }
 
-  /// 上传固件：begin -> chunk 循环 -> finish，带进度回调
+  /// 保存「设备自行下载」的固件目录（`{"ota_set":"http://…"}`）。
+  /// 只保存目录：不下载、不擦写分区；末尾 `/` 可省略（设备补全后在状态 `url`
+  /// 里回显）；空串表示清除目录并中止来自该目录的会话。
+  /// 真正的下载与校验由 [otaApply] 触发。
+  Future<Map<String, dynamic>> otaSetUrl(String url) async {
+    return sendCommand(
+      jsonEncode({'ota_set': url}),
+      recordHistory: false,
+    );
+  }
+
+  /// 上传固件（分块推送）：ota_push_begin -> ota_push_chunk 循环 ->
+  /// ota_push_finish，带进度回调。分块推送仅本地 TCP 通道可用。
   Future<void> otaUpload(
     Uint8List data, {
     void Function(OtaProgress)? onProgress,
@@ -524,25 +537,28 @@ class TcpService extends ChangeNotifier {
     if (size == 0) throw Exception('固件文件为空');
     _addLog(LogKind.system, 'OTA 开始，固件大小 $size 字节');
 
-    // 查询状态，支持续传
+    // 查询状态，支持会话内续传（仅认领本机的分块会话：URL 拉取的
+    // written 不属于分块推送，续传会与设备端会话来源冲突）
     final status = await otaStatus();
     int offset = 0;
     final state = status['state'];
+    final source = status['source'];
     final written = (status['written'] as num?)?.toInt() ?? 0;
     final total = (status['total'] as num?)?.toInt() ?? 0;
-    if (state == 'receiving' && total == size && written <= size) {
+    if (state == 'receiving' &&
+        source == 'tcp' &&
+        total == size &&
+        written <= size) {
       offset = written;
       _addLog(LogKind.system, '检测到已有接收会话，从 $offset 字节续传');
     } else {
       final begin = await sendCommand(
-        jsonEncode({
-          'ota': {'op': 'begin', 'size': size},
-        }),
+        jsonEncode({'ota_push_begin': size}),
         timeout: const Duration(seconds: 120),
         recordHistory: false,
       );
       if (begin['ok'] != true) {
-        throw Exception('OTA begin 失败: ${jsonEncode(begin)}');
+        throw Exception('OTA 分块开始失败: ${jsonEncode(begin)}');
       }
       offset = 0;
     }
@@ -556,13 +572,14 @@ class TcpService extends ChangeNotifier {
       final hex = chunk.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       final resp = await sendCommand(
         jsonEncode({
-          'ota': {'op': 'chunk', 'offset': offset, 'data': hex},
+          'ota_push_chunk': hex,
+          'offset': offset,
         }),
         timeout: const Duration(seconds: 60),
         recordHistory: false,
       );
       if (resp['ok'] != true) {
-        throw Exception('OTA chunk 失败: ${jsonEncode(resp)}');
+        throw Exception('OTA 分块写入失败: ${jsonEncode(resp)}');
       }
       offset = end;
       onProgress?.call(
@@ -570,37 +587,46 @@ class TcpService extends ChangeNotifier {
       );
     }
 
+    // finish 只校验镜像，不切换启动分区（本机收尾用 otaPushApply()）
     final finish = await sendCommand(
-      jsonEncode({
-        'ota': {'op': 'finish'},
-      }),
+      jsonEncode({'ota_push_finish': true}),
       timeout: const Duration(seconds: 120),
       recordHistory: false,
     );
     if (finish['ok'] != true) {
-      throw Exception('OTA finish 失败: ${jsonEncode(finish)}');
+      throw Exception('OTA 校验失败: ${jsonEncode(finish)}');
     }
     _addLog(LogKind.system, 'OTA 固件上传并校验成功');
     onProgress?.call(OtaProgress(size, size, 100, 'ready'));
   }
 
-  /// 应用固件并重启
-  Future<Map<String, dynamic>> otaApply() async {
+  /// 应用固件并重启（`{"ota_apply":<版本>}`，版本必须 **≥1**；`0` 会被设备判
+  /// 参数错误）。目标 = 设备已保存目录 + `<版本>.bin`：设备去下载（秒级返回
+  /// receiving），校验通过后自行切分区重启。
+  /// 分块推送（[otaUpload]）完成后的收尾用 [otaPushApply]。
+  Future<Map<String, dynamic>> otaApply(int version) async {
     return sendCommand(
-      jsonEncode({
-        'ota': {'op': 'apply'},
-      }),
+      jsonEncode({'ota_apply': version}),
       timeout: const Duration(seconds: 30),
       recordHistory: false,
     );
   }
 
-  /// 中止 OTA
+  /// 分块推送的收尾（`{"ota_push_apply":true}`，**仅本地 TCP**）：把已校验
+  /// （ready）的镜像切为启动分区，回复发出后设备重启；没有就绪镜像返回参数错误，
+  /// 传输仍占用返回 `ota_busy`。
+  Future<Map<String, dynamic>> otaPushApply() async {
+    return sendCommand(
+      jsonEncode({'ota_push_apply': true}),
+      timeout: const Duration(seconds: 30),
+      recordHistory: false,
+    );
+  }
+
+  /// 中止当前 OTA 会话（分块推送与 URL 下载都适用）
   Future<Map<String, dynamic>> otaAbort() async {
     return sendCommand(
-      jsonEncode({
-        'ota': {'op': 'abort'},
-      }),
+      jsonEncode({'ota_push_abort': true}),
       recordHistory: false,
     );
   }
