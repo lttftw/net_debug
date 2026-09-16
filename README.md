@@ -85,10 +85,13 @@ Android 正式发布使用仓库 Actions Secrets 中的
 
 - 应用启动时**先尝试加载完整版资源，不存在则回退公开示范资源**，因此
   无论是否提供完整版文件，构建与运行都正常
-- 完整版文件放在同目录下即可自动启用（`TCP_JSON_PROTOCOL.full.md`、
-  `tcp_commands.full.json`、`variables.full.json` 已在 `.gitignore` 中忽略，不会被提交）
+- **完整版只留本地、不入库**：`assets/docs/*.full.md`、`assets/presets/*.full.json`、
+  `assets/variables/*.full.json` 已在 `.gitignore` 中忽略，公开仓库只发布示范版；
+  完整版文件放在同目录下即可自动启用
+- `assets/docs/OTA_PROTOCOL.md` 是工具自带升级功能的完整说明（客户端自身文档，
+  不分示范/完整版），随仓库发布
 - 应用内「协议文档」页展示 **TCP / MQTT / Modbus** 三份通信文档（顶栏切换）；
-  设置页的「OTA 固件升级扩展」另附 `assets/docs/OTA_PROTOCOL.md`（升级功能使用说明）
+  设置页的「OTA 固件升级扩展」另有上述 OTA 文档入口
 
 ## 目录结构
 

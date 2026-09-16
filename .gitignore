@@ -57,10 +57,10 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# 本地个人完整版数据资源（不随公开仓库发布）
-assets/docs/TCP_JSON_PROTOCOL.full.md
-assets/presets/quick_commands.full.json
-assets/variables/variables.full.json
+# 本地个人完整版数据资源（只留本地，不随公开仓库发布；公开仓库只发示范版）
+assets/docs/*.full.md
+assets/presets/*.full.json
+assets/variables/*.full.json
 
 # Android 构建中间产物（lint 报告等，根 /build/ 之外的位置）
 android/build/
