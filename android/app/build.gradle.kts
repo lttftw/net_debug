@@ -16,8 +16,10 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.lttftw.debug_tools"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // compileSdk 使用 API 36 大版本；NDK 与 build-tools 用本机新装的 30.0.16248370 / 36.1.0
+    compileSdk = 36
+    ndkVersion = "30.0.16248370"
+    buildToolsVersion = "36.1.0"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
