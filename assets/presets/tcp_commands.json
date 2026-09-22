@@ -19,11 +19,11 @@
     "commands": [
       {
         "label": "输出0开",
-        "command": "{\"output\":{\"id\":0,\"value\":true}}"
+        "command": "{\"output0\":true}"
       },
       {
         "label": "输出0关",
-        "command": "{\"output\":{\"id\":0,\"value\":false}}"
+        "command": "{\"output0\":false}"
       }
     ]
   },

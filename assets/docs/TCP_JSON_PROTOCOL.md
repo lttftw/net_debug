@@ -15,7 +15,7 @@
 ```json
 {"get":"status"}
 {"get":"config"}
-{"reset":1}
+{"reboot":true}
 ```
 
 ## 变量占位符
@@ -23,7 +23,7 @@
 指令与主题模板中支持 `$(变量名)` 占位符，发送时由「模板变量」自动替换：
 
 ```json
-{"set":{"wifi_ssid":"$(ssid)"}}
+{"wifi_ssid":"$(ssid)"}
 ```
 
 ## 内置示例指令

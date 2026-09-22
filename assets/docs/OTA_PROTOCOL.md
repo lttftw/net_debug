@@ -53,7 +53,7 @@
 **响应**：
 
 ```json
-{"ok":true,"state":"receiving","source":"url","reason":"","written":1024,"total":428736,"percent":0,"running":"ota_0","update":"ota_1","url":"http://192.168.100.157:8088/","ver":"1.0.0"}
+{"ok":true,"state":"receiving","source":"url","reason":"","written":1024,"total":428736,"percent":0,"running_partition":"ota_0","update_partition":"ota_1","url":"http://192.168.100.157:8088/","version":"1.0.0"}
 ```
 
 | 字段 | 说明 |
@@ -64,10 +64,10 @@
 | `written` | 已接收字节数，用于断点续传与进度显示 |
 | `total` | 本次固件总字节数 |
 | `percent` | 进度百分比（0–100） |
-| `running` | 当前运行分区名 |
-| `update` | 本次目标分区名 |
+| `running_partition` | 当前运行分区名 |
+| `update_partition` | 本次目标分区名 |
 | `url` | 已保存的**固件目录**（末尾恒为 `/`，即设备补全后的实际存储值）；未设置时为空串 |
-| `ver` | **当前运行**镜像版本（升级后确认用；设备侧不做新旧版本比对） |
+| `version` | **当前运行**镜像版本（升级后确认用；设备侧不做新旧版本比对） |
 
 ### 3.2 保存固件目录（只保存，不下载）
 

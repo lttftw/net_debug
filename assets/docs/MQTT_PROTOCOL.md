@@ -36,7 +36,7 @@ topic 模板保存在设备状态表，占位符 `$(pkey)` / `$(dev)` / `$(svc)`
 最多 16 条）。示例默认映射：
 
 ```text
-device_runtime=runtime,input_0=counter0,input_1=counter1,output_0=output0,output_1=output1
+device_runtime=runtime,input_0=counter0,input_1=counter1,input_2=counter2,input_3=counter3,output_0=output0,output_1=output1,di_0=di0,di_1=di1,di_2=di2,di_3=di3
 ```
 
 ## 下行：两种报文模式
@@ -46,7 +46,7 @@ device_runtime=runtime,input_0=counter0,input_1=counter1,output_0=output0,output
 发布到 `/sys/<产品名>/<设备名>/thing/service/<标识>`：
 
 ```json
-{"id":"42","version":"1.0","method":"thing.service.counter_write","params":{"ch":0,"value":100}}
+{"id":"42","version":"1.0","method":"thing.service.counter_write","params":{"channel":0,"value":100}}
 ```
 
 回复发布到 `<标识>_reply`，信封：
@@ -55,10 +55,12 @@ device_runtime=runtime,input_0=counter0,input_1=counter1,output_0=output0,output
 {"id":"42","version":"1.0","code":200,"data":{"msg":"成功","params":{"status":"成功","ok":true}}}
 ```
 
-### 原生裸 JSON 模式（调试/工具用）
+### 原生裸 JSON 模式（仅 `config` 开发者通道）
 
-向同一服务 topic 发送**没有 `method` 字段的扁平 JSON 对象**，设备把整个报文
-交给命令分发器，响应以裸 JSON 回复到 `<标识>_reply`：
+向服务 topic 发送**没有 `method` 字段的扁平 JSON 对象**。1.5.0 起只有 `config`
+接受这种报文：用户面 14 个服务缺 `method` 一律以 `service_mismatch` 拒绝，
+不再当作管理命令执行。`config` 的裸 JSON 由设备直接交给命令分发器，响应以
+裸 JSON 回到 `config_reply`：
 
 ```json
 {"get":"config"}
@@ -70,7 +72,7 @@ device_runtime=runtime,input_0=counter0,input_1=counter1,output_0=output0,output
 指令与主题模板中支持 `$(变量名)` 占位符，发送时由「模板变量」自动替换：
 
 ```json
-{"set":{"mqtt_uptime_min":500}}
+{"mqtt_uptime_min":500}
 ```
 
 ## 内置示例指令
