@@ -12,6 +12,7 @@ import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/message_log_view.dart';
 import '../widgets/recent_connections_section.dart';
 import '../widgets/send_composer.dart';
 import 'command_presets_screen.dart';
@@ -43,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _hostCtrl = TextEditingController();
   final TextEditingController _portCtrl = TextEditingController(text: '8080');
   final TextEditingController _cmdCtrl = TextEditingController();
-  final ScrollController _scrollCtrl = ScrollController();
   final FocusNode _cmdFocus = FocusNode();
   bool _connectionInitialized = false;
   bool _sending = false;
@@ -64,16 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _hostCtrl.text = latest.host;
       _portCtrl.text = latest.port.toString();
     }
-    if (!mounted || !_service.autoScroll) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    // 消息区滚动跟随交由 MessageLogView 处理（粘性到底）
+  }
+
+  /// 复制当前全部收发记录（纯消息文本，按展示顺序）
+  Future<void> _copyAllLogs() {
+    return copyMessages(context, _service.logs.map((e) => e.message));
   }
 
   @override
@@ -83,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _hostCtrl.dispose();
     _portCtrl.dispose();
     _cmdCtrl.dispose();
-    _scrollCtrl.dispose();
     _cmdFocus.dispose();
     super.dispose();
   }
@@ -229,6 +224,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     _focusMode = true;
                     _commandExpanded = false;
                   }),
+                ),
+                IconButton(
+                  tooltip: '复制全部记录',
+                  icon: const Icon(Icons.copy_all_outlined),
+                  onPressed: _copyAllLogs,
                 ),
                 IconButton(
                   tooltip: '清空日志',
@@ -485,41 +485,38 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([_service, _theme]),
       builder: (context, _) {
-        final logs = _service.logs;
         return Padding(
           padding: margin,
-          child: logs.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.forum_outlined,
-                        size: 36,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text('等待数据'),
-                      const SizedBox(height: 4),
-                      Text(
-                        '连接后发送 JSON 指令，响应会显示在这里',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+          child: MessageLogView<LogEntry>(
+            entries: _service.logs,
+            keyOf: ObjectKey.new,
+            empty: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.forum_outlined,
+                    size: 36,
+                    color: Theme.of(context).colorScheme.outline,
                   ),
-                )
-              : ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: logs.length,
-                  itemBuilder: (context, i) => _LogTile(
-                    entry: logs[i],
-                    txColor: _theme.effectiveTxColor,
-                    rxColor: _theme.effectiveRxColor,
-                    fontSize: _theme.logFontSize,
-                    displayStyle: _theme.messageDisplayStyle,
+                  const SizedBox(height: 10),
+                  const Text('等待数据'),
+                  const SizedBox(height: 4),
+                  Text(
+                    '连接后发送 JSON 指令，响应会显示在这里',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ),
+                ],
+              ),
+            ),
+            itemBuilder: (context, i, entry) => _LogTile(
+              entry: entry,
+              txColor: _theme.effectiveTxColor,
+              rxColor: _theme.effectiveRxColor,
+              fontSize: _theme.logFontSize,
+              displayStyle: _theme.messageDisplayStyle,
+            ),
+          ),
         );
       },
     );

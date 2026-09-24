@@ -11,6 +11,7 @@ import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/message_log_view.dart';
 import '../widgets/send_composer.dart';
 import 'command_presets_screen.dart';
 
@@ -47,7 +48,6 @@ enum _SendFormat { text, hex }
 
 class _SerialScreenState extends State<SerialScreen> {
   final TextEditingController _inputCtrl = TextEditingController();
-  final ScrollController _scrollCtrl = ScrollController();
 
   _DisplayMode _displayMode = _DisplayMode.text;
   _LineEnding _lineEnding = _LineEnding.lf;
@@ -65,28 +65,14 @@ class _SerialScreenState extends State<SerialScreen> {
   ThemeService get _theme => widget.theme;
 
   @override
-  void initState() {
-    super.initState();
-    _service.addListener(_onServiceChanged);
-  }
-
-  @override
   void dispose() {
-    _service.removeListener(_onServiceChanged);
     _inputCtrl.dispose();
-    _scrollCtrl.dispose();
     super.dispose();
   }
 
-  void _onServiceChanged() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollCtrl.hasClients) return;
-      _scrollCtrl.animateTo(
-        _scrollCtrl.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
+  /// 复制当前全部收发记录（按当前 文本/HEX 显示模式导出）
+  Future<void> _copyAllLogs() {
+    return copyMessages(context, _service.logs.map(_displayTextOf));
   }
 
   /// 打开配置弹窗（端口 + 参数）。用户点「打开」返回配置并连接，
@@ -231,6 +217,11 @@ class _SerialScreenState extends State<SerialScreen> {
             }),
           ),
           IconButton(
+            tooltip: '复制全部记录',
+            icon: const Icon(Icons.copy_all_outlined),
+            onPressed: _copyAllLogs,
+          ),
+          IconButton(
             tooltip: '清空日志',
             icon: const Icon(Icons.delete_sweep_outlined),
             onPressed: _confirmClearLogs,
@@ -370,38 +361,44 @@ class _SerialScreenState extends State<SerialScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([_service, _theme]),
       builder: (context, _) {
-        final logs = _service.logs;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: logs.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.settings_input_composite,
-                        size: 36,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text('等待数据'),
-                      const SizedBox(height: 4),
-                      Text(
-                        '选择端口并打开后，收发数据会显示在这里',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+          child: MessageLogView<SerialLogEntry>(
+            entries: _service.logs,
+            keyOf: ObjectKey.new,
+            empty: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.settings_input_composite,
+                    size: 36,
+                    color: Theme.of(context).colorScheme.outline,
                   ),
-                )
-              : ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: logs.length,
-                  itemBuilder: (context, i) => _logTile(logs[i]),
-                ),
+                  const SizedBox(height: 10),
+                  const Text('等待数据'),
+                  const SizedBox(height: 4),
+                  Text(
+                    '选择端口并打开后，收发数据会显示在这里',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            itemBuilder: (context, i, entry) => _logTile(entry),
+          ),
         );
       },
     );
+  }
+
+  /// 条目在当前显示模式下的文本（文本 / HEX）
+  String _displayTextOf(SerialLogEntry entry) {
+    final bytes = entry.rawBytes;
+    if (bytes == null) return entry.message;
+    return _displayMode == _DisplayMode.hex
+        ? SerialService.bytesToHex(bytes)
+        : SerialService.bytesToText(bytes);
   }
 
   Widget _logTile(SerialLogEntry entry) {
@@ -411,11 +408,7 @@ class _SerialScreenState extends State<SerialScreen> {
       SerialLogKind.system => (Colors.grey, 'SYS'),
       SerialLogKind.error => (Colors.redAccent, 'ERR'),
     };
-    final message = entry.rawBytes == null
-        ? entry.message
-        : (_displayMode == _DisplayMode.hex
-            ? SerialService.bytesToHex(entry.rawBytes!)
-            : SerialService.bytesToText(entry.rawBytes!));
+    final message = _displayTextOf(entry);
     return LogLineView(
       time: entry.time,
       tag: tag,

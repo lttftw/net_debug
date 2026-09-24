@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/global_log_service.dart';
+import '../widgets/message_log_view.dart';
 
 /// 全局日志查看页：统一展示来自各模块的日志，支持筛选与搜索
 class LogViewerScreen extends StatefulWidget {
@@ -17,7 +18,6 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
   String _searchQuery = '';
   Set<GlobalLogSource> _enabledSources = GlobalLogSource.values.toSet();
   bool _autoScroll = true;
-  final _scrollCtrl = ScrollController();
 
   GlobalLogService get _service => widget.service;
 
@@ -40,7 +40,6 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
-    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -60,6 +59,18 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
     return indices;
   }
 
+  /// 当前筛选/搜索命中的条目（无筛选时直接返回原始列表，不做复制）
+  List<GlobalLogEntry> _visibleLogs() {
+    final logs = _service.logs;
+    if (_noFilter) return logs;
+    return [for (final i in _buildIndices(logs)) logs[i]];
+  }
+
+  /// 复制当前可见（筛选/搜索后）的全部日志
+  Future<void> _copyVisibleLogs() {
+    return copyMessages(context, _visibleLogs().map((e) => e.message));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,6 +83,11 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
             ),
             tooltip: _autoScroll ? '自动滚动：开' : '自动滚动：关',
             onPressed: () => setState(() => _autoScroll = !_autoScroll),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy_all_outlined),
+            tooltip: '复制当前可见日志',
+            onPressed: _copyVisibleLogs,
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -91,52 +107,38 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
             child: ListenableBuilder(
               listenable: _service,
               builder: (context, _) {
-                final logs = _service.logs;
-                if (logs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      '暂无日志',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  );
+                if (_service.logs.isEmpty) {
+                  return _emptyHint('暂无日志');
                 }
                 // 无筛选/搜索：直接懒加载原始列表（不复制、不过滤）；
                 // 有筛选/搜索：按需构建匹配索引，逐项懒渲染
-                final filtered = !_noFilter;
-                final List<int> indices;
-                if (filtered) {
-                  indices = _buildIndices(logs);
-                  if (indices.isEmpty) {
-                    return Center(
-                      child: Text(
-                        '没有匹配的日志',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    );
-                  }
-                } else {
-                  indices = const [];
+                final display = _visibleLogs();
+                if (display.isEmpty) {
+                  return _emptyHint('没有匹配的日志');
                 }
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_autoScroll && _scrollCtrl.hasClients) {
-                    _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-                  }
-                });
-                return ListView.builder(
-                  controller: _scrollCtrl,
-                  itemCount: filtered ? indices.length : logs.length,
-                  itemBuilder: (context, index) => _buildLogEntry(
-                    filtered ? logs[indices[index]] : logs[index],
-                  ),
+                return MessageLogView<GlobalLogEntry>(
+                  entries: display,
+                  keyOf: ObjectKey.new,
+                  autoFollow: _autoScroll,
+                  padding: EdgeInsets.zero,
+                  itemBuilder: (context, index, entry) =>
+                      _buildLogEntry(entry),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _emptyHint(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }

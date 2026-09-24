@@ -8,6 +8,7 @@ import '../services/theme_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/message_log_view.dart';
 import '../widgets/modbus_form.dart';
 import '../widgets/recent_connections_section.dart';
 import 'command_presets_screen.dart';
@@ -34,7 +35,6 @@ class ModbusScreen extends StatefulWidget {
 class _ModbusScreenState extends State<ModbusScreen> {
   final TextEditingController _hostCtrl = TextEditingController();
   final TextEditingController _portCtrl = TextEditingController(text: '502');
-  final ScrollController _scrollCtrl = ScrollController();
   final GlobalKey<ModbusFormState> _formKey = GlobalKey<ModbusFormState>();
   bool _sending = false;
   bool _connectionInitialized = false;
@@ -54,7 +54,6 @@ class _ModbusScreenState extends State<ModbusScreen> {
     _service.removeListener(_onServiceChanged);
     _hostCtrl.dispose();
     _portCtrl.dispose();
-    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -65,14 +64,12 @@ class _ModbusScreenState extends State<ModbusScreen> {
       _hostCtrl.text = latest.host;
       _portCtrl.text = latest.port.toString();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollCtrl.hasClients) return;
-      _scrollCtrl.animateTo(
-        _scrollCtrl.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
+    // 消息区滚动跟随交由 MessageLogView 处理（粘性到底）
+  }
+
+  /// 复制当前全部收发记录（纯消息文本，按展示顺序）
+  Future<void> _copyAllLogs() {
+    return copyMessages(context, _service.logs.map((e) => e.message));
   }
 
   Future<void> _connect() async {
@@ -185,6 +182,11 @@ class _ModbusScreenState extends State<ModbusScreen> {
             tooltip: '连接配置',
             icon: const Icon(Icons.settings_outlined),
             onPressed: _openConfigPanel,
+          ),
+          IconButton(
+            tooltip: '复制全部记录',
+            icon: const Icon(Icons.copy_all_outlined),
+            onPressed: _copyAllLogs,
           ),
           IconButton(
             tooltip: '清空日志',
@@ -424,35 +426,32 @@ class _ModbusScreenState extends State<ModbusScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([_service, _theme]),
       builder: (context, _) {
-        final logs = _service.logs;
         return Padding(
           padding: margin,
-          child: logs.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.settings_input_component,
-                        size: 36,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text('等待数据'),
-                      const SizedBox(height: 4),
-                      Text(
-                        '连接后发送 Modbus 指令，响应会显示在这里',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+          child: MessageLogView<ModbusLogEntry>(
+            entries: _service.logs,
+            keyOf: ObjectKey.new,
+            empty: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.settings_input_component,
+                    size: 36,
+                    color: Theme.of(context).colorScheme.outline,
                   ),
-                )
-              : ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: logs.length,
-                  itemBuilder: (context, i) => _logTile(logs[i]),
-                ),
+                  const SizedBox(height: 10),
+                  const Text('等待数据'),
+                  const SizedBox(height: 4),
+                  Text(
+                    '连接后发送 Modbus 指令，响应会显示在这里',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            itemBuilder: (context, i, entry) => _logTile(entry),
+          ),
         );
       },
     );

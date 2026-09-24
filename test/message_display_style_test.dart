@@ -27,4 +27,22 @@ void main() {
       message,
     );
   });
+
+  test('repeated calls reuse cached result without changing semantics', () {
+    const message = '{"a":1}';
+    final first = formatMessageForDisplay(
+      message,
+      MessageDisplayStyle.formattedJson,
+    );
+    final second = formatMessageForDisplay(
+      message,
+      MessageDisplayStyle.formattedJson,
+    );
+    expect(second, first);
+    // 缓存不得污染原样显示
+    expect(
+      formatMessageForDisplay(message, MessageDisplayStyle.original),
+      message,
+    );
+  });
 }

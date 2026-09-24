@@ -11,6 +11,7 @@ import '../services/topic_template_service.dart';
 import '../services/variables_service.dart';
 import '../widgets/app_toast.dart';
 import '../widgets/log_line_view.dart';
+import '../widgets/message_log_view.dart';
 import '../widgets/recent_connections_section.dart';
 import '../widgets/send_composer.dart';
 import '../widgets/variable_text_field.dart';
@@ -52,7 +53,6 @@ class _MqttScreenState extends State<MqttScreen> {
   final _subTopicCtrl = TextEditingController();
   final _pubTopicCtrl = TextEditingController();
   final _payloadCtrl = TextEditingController();
-  final ScrollController _recordScroll = ScrollController();
   int _qos = 0;
   bool _composerExpanded = true;
   bool _focusMode = false;
@@ -64,31 +64,21 @@ class _MqttScreenState extends State<MqttScreen> {
   CommandPresetService get _qcs => widget.quickCommands;
 
   @override
-  void initState() {
-    super.initState();
-    _service.addListener(_onServiceChanged);
-  }
-
-  @override
   void dispose() {
-    _service.removeListener(_onServiceChanged);
     _subTopicCtrl.dispose();
     _pubTopicCtrl.dispose();
     _payloadCtrl.dispose();
-    _recordScroll.dispose();
     super.dispose();
   }
 
-  /// 记录区自动滚动到底部（与 TCP 工具日志区一致）
-  void _onServiceChanged() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_recordScroll.hasClients) return;
-      _recordScroll.animateTo(
-        _recordScroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
+  /// 复制当前全部往来记录（纯文本；有主题的条目带上主题）
+  Future<void> _copyAllRecords() {
+    return copyMessages(
+      context,
+      _service.logs.map(
+        (e) => e.topic == null ? e.message : '[${e.topic}] ${e.message}',
+      ),
+    );
   }
 
   Future<void> _toggleConnect() async {
@@ -274,6 +264,11 @@ class _MqttScreenState extends State<MqttScreen> {
                     _focusMode = true;
                     _composerExpanded = false;
                   }),
+                ),
+                IconButton(
+                  tooltip: '复制全部记录',
+                  icon: const Icon(Icons.copy_all_outlined),
+                  onPressed: _copyAllRecords,
                 ),
                 IconButton(
                   tooltip: '清空往来记录',
@@ -564,29 +559,26 @@ class _MqttScreenState extends State<MqttScreen> {
   Widget _buildRecordView({
     EdgeInsets margin = const EdgeInsets.symmetric(horizontal: 12),
   }) {
-    final logs = _service.logs;
     return Padding(
       padding: margin,
-      child: logs.isEmpty
-          ? const Center(
-              child: Text(
-                '暂无记录',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            )
-          : ListView.builder(
-              controller: _recordScroll,
-              padding: const EdgeInsets.all(8),
-              itemCount: logs.length,
-              itemBuilder: (context, i) => _RecordTile(
-                entry: logs[i],
-                service: _service,
-                txColor: _theme.effectiveTxColor,
-                rxColor: _theme.effectiveRxColor,
-                fontSize: _theme.logFontSize,
-                displayStyle: _theme.messageDisplayStyle,
-              ),
-            ),
+      child: MessageLogView<MqttLogEntry>(
+        entries: _service.logs,
+        keyOf: ObjectKey.new,
+        empty: const Center(
+          child: Text(
+            '暂无记录',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
+        itemBuilder: (context, i, entry) => _RecordTile(
+          entry: entry,
+          service: _service,
+          txColor: _theme.effectiveTxColor,
+          rxColor: _theme.effectiveRxColor,
+          fontSize: _theme.logFontSize,
+          displayStyle: _theme.messageDisplayStyle,
+        ),
+      ),
     );
   }
 
